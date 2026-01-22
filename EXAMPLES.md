@@ -154,28 +154,13 @@ python run.py \
 
 ### Available Models
 
-- `qwen/qwen3-4b`
 - `qwen/qwen3-8b`
 - `qwen/qwen3-14b`
 - `qwen/qwen3-32b`
 - `openai/gpt-oss-20b` (not just for user simulator)
 
-### Example 8: Qwen3-4B via OpenRouter
 
-```bash
-python run.py \
-  --env retail \
-  --agent-strategy tool-calling \
-  --model qwen/qwen3-4b \
-  --model-provider openrouter \
-  --user-model openai/gpt-oss-20b \
-  --user-model-provider openrouter \
-  --user-strategy llm \
-  --task-ids 0 1 2 3 4 \
-  --max-concurrency 3
-```
-
-### Example 9: Qwen3-8B via OpenRouter
+### Example 8: Qwen3-8B via OpenRouter
 
 ```bash
 python run.py \
@@ -203,7 +188,7 @@ python run.py \
   --max-concurrency 3
 ```
 
-### Example 11: Qwen3-32B via OpenRouter
+### Example 10: Qwen3-32B via OpenRouter
 
 ```bash
 python run.py \
@@ -219,7 +204,7 @@ python run.py \
   --max-concurrency 2
 ```
 
-### Example 12: GPT-OSS-20B as Agent (OpenRouter)
+### Example 11: GPT-OSS-20B as Agent (OpenRouter)
 
 ```bash
 python run.py \
@@ -254,7 +239,7 @@ python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen-3-4B --port 8001
 python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen-3-32B --port 8002
 ```
 
-### Example 13: Local Qwen3-8B Agent + OpenRouter User
+### Example 12: Local Qwen3-8B Agent + OpenRouter User
 
 Agent on localhost:8000, user uses OpenRouter
 
@@ -273,7 +258,7 @@ python run.py \
   --max-concurrency 1
 ```
 
-### Example 14: Both Local - Different Ports
+### Example 13: Both Local - Different Ports
 
 Agent on port 8000, user on port 8001
 
@@ -294,7 +279,7 @@ python run.py \
   --max-concurrency 1
 ```
 
-### Example 15: Local Agent on Remote Server + OpenRouter User
+### Example 14: Local Agent on Remote Server + OpenRouter User
 
 Agent on remote server (e.g., 192.168.1.100), user uses OpenRouter
 
@@ -312,7 +297,7 @@ python run.py \
   --max-concurrency 3
 ```
 
-### Example 16: Remote Server with Authentication
+### Example 15: Remote Server with Authentication
 
 If your local server requires authentication:
 
@@ -330,7 +315,7 @@ python run.py \
   --max-concurrency 2
 ```
 
-### Example 17: Multiple Local Models Across Servers
+### Example 16: Multiple Local Models Across Servers
 
 Agent on server A (port 8000), user on server B (port 8000)
 
@@ -356,7 +341,7 @@ python run.py \
 
 ## 5. MIXED CONFIGURATIONS - Combining Providers
 
-### Example 18: DashScope Agent + Local User
+### Example 17: DashScope Agent + Local User
 
 ```bash
 python run.py \
@@ -373,7 +358,7 @@ python run.py \
   --max-concurrency 2
 ```
 
-### Example 19: OpenRouter Agent + Local User
+### Example 18: OpenRouter Agent + Local User
 
 ```bash
 python run.py \
@@ -389,7 +374,7 @@ python run.py \
   --max-concurrency 1
 ```
 
-### Example 20: Local Agent + DashScope User
+### Example 19: Local Agent + DashScope User
 
 ```bash
 python run.py \
@@ -411,7 +396,7 @@ python run.py \
 
 ## 6. ADVANCED CONFIGURATIONS
 
-### Example 21: Full Test Run with All Trials
+### Example 20: Full Test Run with All Trials
 
 ```bash
 python run.py \
@@ -428,7 +413,7 @@ python run.py \
   --seed 42
 ```
 
-### Example 22: Specific Task Benchmarking
+### Example 21: Specific Task Benchmarking
 
 ```bash
 python run.py \
@@ -444,7 +429,7 @@ python run.py \
   --temperature 0.1
 ```
 
-### Example 23: Different Temperature Settings
+### Example 22: Different Temperature Settings
 
 ```bash
 python run.py \
@@ -459,7 +444,7 @@ python run.py \
   --max-concurrency 2
 ```
 
-### Example 24: High Max Tokens for Complex Tasks
+### Example 23: High Max Tokens for Complex Tasks
 
 ```bash
 python run.py \

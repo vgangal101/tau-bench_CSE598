@@ -36,7 +36,6 @@ Script: ./run_examples.sh dashscope-us-8b
 
 Model Size    Model Name        Model ID              Quick Command
 ─────────────────────────────────────────────────────────────────────────────
-4B            Qwen3-4B          qwen/qwen3-4b         
 8B            Qwen3-8B          qwen/qwen3-8b         
 14B           Qwen3-14B         qwen/qwen3-14b        
 32B           Qwen3-32B         qwen/qwen3-32b        
@@ -121,7 +120,6 @@ Run all DashScope Singapore:
   ./run_examples.sh dashscope-sg-32b
 
 Run all OpenRouter:
-  ./run_examples.sh openrouter-4b
   ./run_examples.sh openrouter-8b
   ./run_examples.sh openrouter-14b
   ./run_examples.sh openrouter-32b
@@ -179,7 +177,7 @@ DOCUMENTATION
 ═══════════════════════════════════════════════════════════════════════════════
 
 QUICKSTART.md              → Start here (5 minutes)
-EXAMPLES.md                → 24 detailed examples
+EXAMPLES.md                → 23 detailed examples
 CLAUDE.md                  → Architecture & design
 IMPLEMENTATION_SUMMARY.md  → Technical overview
 run_examples.sh --help     → Script help

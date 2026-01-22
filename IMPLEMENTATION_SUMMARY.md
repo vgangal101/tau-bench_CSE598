@@ -13,7 +13,7 @@ tau_bench/model_utils/
 └── response_parser.py           # Response normalization for thinking modes
 
 .env.template                     # API key template
-EXAMPLES.md                       # 24 detailed examples
+EXAMPLES.md                       # 23 detailed examples
 QUICKSTART.md                     # 5-minute quick start
 run_examples.sh                   # Convenience runner script
 ```
@@ -61,9 +61,8 @@ run_examples.sh                   # Convenience runner script
 
 **Setup:** `DASHSCOPE_API_KEY` from https://dashscope.console.aliyun.com/
 
-### OpenRouter - 5 Models
+### OpenRouter - Models
 
-- qwen/qwen3-4b
 - qwen/qwen3-8b
 - qwen/qwen3-14b
 - qwen/qwen3-32b
@@ -88,7 +87,7 @@ Any OpenAI-compatible server:
 | Feature | Status | Details |
 |---------|--------|---------|
 | DashScope Integration | ✅ | 4 models × 2 regions |
-| OpenRouter Integration | ✅ | 5 models available |
+| OpenRouter Integration | ✅ | 4 models available |
 | Local Model Support | ✅ | Custom base URLs |
 | Region Selection | ✅ | Singapore/US via --dashscope-region |
 | Response Normalization | ✅ | Handles thinking/reasoning modes |
@@ -204,7 +203,7 @@ User:  completion(..., max_tokens=500)
 ### Full Qwen Model Lineup
 - DashScope Singapore: 4B, 8B, 14B, 32B
 - DashScope US: 8B, 32B (simplified)
-- OpenRouter: 4B, 8B, 14B, 32B, GPT-OSS-20B
+- OpenRouter: 8B, 14B, 32B, GPT-OSS-20B
 
 ### Local Server Scenarios
 - Single local server
