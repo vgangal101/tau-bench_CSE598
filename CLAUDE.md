@@ -123,7 +123,7 @@ python run.py \
 
 Use Qwen and other models via OpenRouter API:
 
-**Available models:** `qwen/qwen3-4b`, `qwen/qwen3-8b`, `qwen/qwen3-14b`, `qwen/qwen3-32b`, `openai/gpt-oss-20b`
+**Available models:** `qwen/qwen3-8b`, `qwen/qwen3-14b`, `qwen/qwen3-32b`, `openai/gpt-oss-20b`
 
 **Setup:**
 1. Get API key from https://openrouter.ai/

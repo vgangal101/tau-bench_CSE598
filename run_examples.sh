@@ -57,7 +57,6 @@ if [ $# -eq 0 ]; then
     echo "  ./run_examples.sh dashscope-us-32b   - Qwen3-32B on US"
     echo ""
     echo "OPENROUTER EXAMPLES:"
-    echo "  ./run_examples.sh openrouter-4b      - Qwen3-4B via OpenRouter"
     echo "  ./run_examples.sh openrouter-8b      - Qwen3-8B via OpenRouter"
     echo "  ./run_examples.sh openrouter-14b     - Qwen3-14B via OpenRouter"
     echo "  ./run_examples.sh openrouter-32b     - Qwen3-32B via OpenRouter"
@@ -169,12 +168,6 @@ case $COMMAND in
         eval $CMD
         ;;
     # OPENROUTER
-    openrouter-4b)
-        print_header "Qwen3-4B (OpenRouter)"
-        CMD="$(build_cmd) --model qwen/qwen3-4b --model-provider openrouter --user-model openai/gpt-oss-20b --user-model-provider openrouter --agent-strategy tool-calling"
-        print_info "Command: $CMD"
-        eval $CMD
-        ;;
     openrouter-8b)
         print_header "Qwen3-8B (OpenRouter)"
         CMD="$(build_cmd) --model qwen/qwen3-8b --model-provider openrouter --user-model openai/gpt-oss-20b --user-model-provider openrouter --agent-strategy tool-calling"

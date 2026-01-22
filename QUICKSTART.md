@@ -105,7 +105,6 @@ python run.py --model qwen3-8b --model-provider dashscope --dashscope-region us 
 
 ### All OpenRouter Models
 
-- `qwen/qwen3-4b`
 - `qwen/qwen3-8b`
 - `qwen/qwen3-14b`
 - `qwen/qwen3-32b`
@@ -240,7 +239,6 @@ python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen-3-8B --port 8000
 ### All OpenRouter Models
 
 ```bash
-./run_examples.sh openrouter-4b
 ./run_examples.sh openrouter-8b
 ./run_examples.sh openrouter-14b
 ./run_examples.sh openrouter-32b

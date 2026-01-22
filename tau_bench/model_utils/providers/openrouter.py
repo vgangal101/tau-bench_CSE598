@@ -17,7 +17,6 @@ class OpenRouterConfig:
     BASE_URL = "https://openrouter.ai/api/v1"
 
     MODELS = [
-        "qwen/qwen3-4b",
         "qwen/qwen3-8b",
         "qwen/qwen3-14b",
         "qwen/qwen3-32b",
