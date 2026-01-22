@@ -11,6 +11,7 @@ from tau_bench.types import (
     RESPOND_ACTION_NAME,
     RESPOND_ACTION_FIELD_NAME,
 )
+from tau_bench.model_utils.response_parser import normalize_response
 from typing import Optional, List, Dict, Any, Tuple
 
 
@@ -23,6 +24,9 @@ class ChatReActAgent(Agent):
         provider: str,
         use_reasoning: bool = True,
         temperature: float = 0.0,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        max_tokens: int = 1000,
     ) -> None:
         instruction = REACT_INSTRUCTION if use_reasoning else ACT_INSTRUCTION
         self.prompt = (
@@ -33,18 +37,33 @@ class ChatReActAgent(Agent):
         self.temperature = temperature
         self.use_reasoning = use_reasoning
         self.tools_info = tools_info
+        self.base_url = base_url
+        self.api_key = api_key
+        self.max_tokens = max_tokens
 
     def generate_next_step(
         self, messages: List[Dict[str, Any]]
     ) -> Tuple[Dict[str, Any], Action, float]:
-        res = completion(
-            model=self.model,
-            custom_llm_provider=self.provider,
-            messages=messages,
-            temperature=self.temperature,
-        )
-        message = res.choices[0].message
-        action_str = message.content.split("Action:")[-1].strip()
+        completion_kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
+
+        # Add custom_llm_provider only for standard providers
+        if self.provider and self.provider not in ["dashscope", "openrouter", "local"]:
+            completion_kwargs["custom_llm_provider"] = self.provider
+
+        # Add base_url and api_key for custom endpoints
+        if self.base_url:
+            completion_kwargs["api_base"] = self.base_url
+        if self.api_key:
+            completion_kwargs["api_key"] = self.api_key
+
+        res = completion(**completion_kwargs)
+        message = normalize_response(res.choices[0].message.model_dump())
+        action_str = message.get("content", "").split("Action:")[-1].strip()
         try:
             action_parsed = json.loads(action_str)
         except json.JSONDecodeError:
@@ -56,7 +75,7 @@ class ChatReActAgent(Agent):
         assert "name" in action_parsed
         assert "arguments" in action_parsed
         action = Action(name=action_parsed["name"], kwargs=action_parsed["arguments"])
-        return message.model_dump(), action, res._hidden_params["response_cost"]
+        return message, action, res._hidden_params["response_cost"]
 
     def solve(
         self, env: Env, task_index: Optional[int] = None, max_num_steps: int = 30

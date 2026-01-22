@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from tau_bench.agents.base import Agent
 from tau_bench.envs.base import Env
 from tau_bench.types import SolveResult, Action, RESPOND_ACTION_NAME
+from tau_bench.model_utils.response_parser import normalize_response
 
 
 class FewShotToolCallingAgent(Agent):
@@ -20,6 +21,9 @@ class FewShotToolCallingAgent(Agent):
         few_shot_displays: List[str],
         temperature: float = 0.0,
         num_few_shots: int = 5,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        max_tokens: int = 1000,
     ):
         self.tools_info = tools_info
         self.wiki = wiki
@@ -32,6 +36,9 @@ class FewShotToolCallingAgent(Agent):
         self.few_shot_displays = few_shot_displays
         self.temperature = temperature
         self.num_few_shots = num_few_shots
+        self.base_url = base_url
+        self.api_key = api_key
+        self.max_tokens = max_tokens
     def solve(
         self, env: Env, task_index: Optional[int] = None, max_num_steps: int = 30
     ) -> SolveResult:
@@ -47,14 +54,26 @@ class FewShotToolCallingAgent(Agent):
             {"role": "user", "content": obs},
         ]
         for _ in range(max_num_steps):
-            res = completion(
-                messages=messages,
-                model=self.model,
-                custom_llm_provider=self.provider,
-                tools=self.tools_info,
-                temperature=self.temperature,
-            )
-            next_message = res.choices[0].message.model_dump()
+            completion_kwargs = {
+                "messages": messages,
+                "model": self.model,
+                "tools": self.tools_info,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+            }
+
+            # Add custom_llm_provider only for standard providers
+            if self.provider and self.provider not in ["dashscope", "openrouter", "local"]:
+                completion_kwargs["custom_llm_provider"] = self.provider
+
+            # Add base_url and api_key for custom endpoints
+            if self.base_url:
+                completion_kwargs["api_base"] = self.base_url
+            if self.api_key:
+                completion_kwargs["api_key"] = self.api_key
+
+            res = completion(**completion_kwargs)
+            next_message = normalize_response(res.choices[0].message.model_dump())
             total_cost += res._hidden_params["response_cost"]
             action = message_to_action(next_message)
             env_response = env.step(action)

@@ -5,6 +5,7 @@ import enum
 from litellm import completion
 
 from typing import Optional, List, Dict, Any, Union
+from tau_bench.model_utils.response_parser import normalize_response
 
 
 class BaseUserSimulationEnv(abc.ABC):
@@ -35,22 +36,46 @@ class HumanUserSimulationEnv(BaseUserSimulationEnv):
 
 
 class LLMUserSimulationEnv(BaseUserSimulationEnv):
-    def __init__(self, model: str, provider: str) -> None:
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        max_tokens: int = 500,
+    ) -> None:
         super().__init__()
         self.messages: List[Dict[str, Any]] = []
         self.model = model
         self.provider = provider
+        self.base_url = base_url
+        self.api_key = api_key
+        self.max_tokens = max_tokens
         self.total_cost = 0.0
         self.reset()
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
-        res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages
-        )
-        message = res.choices[0].message
-        self.messages.append(message.model_dump())
+        completion_kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+        }
+
+        # Add custom_llm_provider only for standard providers
+        if self.provider and self.provider not in ["dashscope", "openrouter", "local"]:
+            completion_kwargs["custom_llm_provider"] = self.provider
+
+        # Add base_url and api_key for custom endpoints
+        if self.base_url:
+            completion_kwargs["api_base"] = self.base_url
+        if self.api_key:
+            completion_kwargs["api_key"] = self.api_key
+
+        res = completion(**completion_kwargs)
+        message = normalize_response(res.choices[0].message.model_dump())
+        self.messages.append(message)
         self.total_cost = res._hidden_params["response_cost"]
-        return message.content
+        return message.get("content", "")
 
     def build_system_prompt(self, instruction: Optional[str]) -> str:
         instruction_display = (
@@ -86,8 +111,21 @@ Rules:
 
 
 class ReactUserSimulationEnv(LLMUserSimulationEnv):
-    def __init__(self, model: str, provider: str) -> None:
-        super().__init__(model=model, provider=provider)
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        max_tokens: int = 500,
+    ) -> None:
+        super().__init__(
+            model=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
         self.reset()
 
     def build_system_prompt(self, instruction: Optional[str]) -> str:
@@ -115,13 +153,27 @@ User Response:
 <the user response (this will be parsed and sent to the agent)>"""
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
-        res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages
-        )
-        message = res.choices[0].message
-        self.messages.append(message.model_dump())
+        completion_kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+        }
+
+        # Add custom_llm_provider only for standard providers
+        if self.provider and self.provider not in ["dashscope", "openrouter", "local"]:
+            completion_kwargs["custom_llm_provider"] = self.provider
+
+        # Add base_url and api_key for custom endpoints
+        if self.base_url:
+            completion_kwargs["api_base"] = self.base_url
+        if self.api_key:
+            completion_kwargs["api_key"] = self.api_key
+
+        res = completion(**completion_kwargs)
+        message = normalize_response(res.choices[0].message.model_dump())
+        self.messages.append(message)
         self.total_cost = res._hidden_params["response_cost"]
-        return self.parse_response(message.content)
+        return self.parse_response(message.get("content", ""))
 
     def reset(self, instruction: Optional[str] = None) -> str:
         self.messages = [
@@ -154,27 +206,62 @@ User Response:
 
 
 class VerifyUserSimulationEnv(LLMUserSimulationEnv):
-    def __init__(self, model: str, provider: str, max_attempts: int = 3) -> None:
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        max_attempts: int = 3,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        max_tokens: int = 500,
+    ) -> None:
         self.model = model
         self.provider = provider
+        self.base_url = base_url
+        self.api_key = api_key
+        self.max_tokens = max_tokens
         self.max_attempts = max_attempts
+        self.messages = []
+        self.total_cost = 0.0
         self.reset()
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         attempts = 0
         cur_message = None
         while attempts < self.max_attempts:
-            res = completion(
-                model=self.model, custom_llm_provider=self.provider, messages=messages
-            )
-            cur_message = res.choices[0].message
+            completion_kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": self.max_tokens,
+            }
+
+            # Add custom_llm_provider only for standard providers
+            if self.provider and self.provider not in ["dashscope", "openrouter", "local"]:
+                completion_kwargs["custom_llm_provider"] = self.provider
+
+            # Add base_url and api_key for custom endpoints
+            if self.base_url:
+                completion_kwargs["api_base"] = self.base_url
+            if self.api_key:
+                completion_kwargs["api_key"] = self.api_key
+
+            res = completion(**completion_kwargs)
+            cur_message = normalize_response(res.choices[0].message.model_dump())
             self.total_cost = res._hidden_params["response_cost"]
-            if verify(self.model, self.provider, cur_message, messages):
-                self.messages.append(cur_message.model_dump())
-                return cur_message.content
+            if verify(
+                self.model,
+                self.provider,
+                cur_message,
+                messages,
+                self.base_url,
+                self.api_key,
+                self.max_tokens,
+            ):
+                self.messages.append(cur_message)
+                return cur_message.get("content", "")
             attempts += 1
         assert cur_message is not None
-        return cur_message.content
+        return cur_message.get("content", "")
 
     def reset(self, instruction: Optional[str] = None) -> str:
         self.messages = [
@@ -204,47 +291,72 @@ def map_role_label(role: str) -> str:
 
 
 def verify(
-    model: str, provider: str, response: str, messages: List[Dict[str, Any]]
+    model: str,
+    provider: str,
+    response: Dict[str, Any],
+    messages: List[Dict[str, Any]],
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    max_tokens: int = 500,
 ) -> bool:
     transcript = "\n".join(
         [
-            f"{map_role_label(message['role'])}: {message['content']}"
+            f"{map_role_label(message['role'])}: {message.get('content', '')}"
             for message in messages
         ]
     )
+    response_content = response.get("content", "") if isinstance(response, dict) else str(response)
     prompt = f"""You are a supervisor of the Agent in the conversation. You are given a Transcript of a conversation between a Customer and an Agent. The Customer has generated a Response, and you need to verify if it is satisfactory (true) or not (false).
 Your answer will be parsed, so do not include any other text than the classification (true or false).
-    
+
 # Transcript:
 {transcript}
 
 # Response:
-{response}
+{response_content}
 
 -----
 
 Classification:"""
-    res = completion(
-        model=model,
-        custom_llm_provider=provider,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    completion_kwargs = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+    }
+
+    # Add custom_llm_provider only for standard providers
+    if provider and provider not in ["dashscope", "openrouter", "local"]:
+        completion_kwargs["custom_llm_provider"] = provider
+
+    # Add base_url and api_key for custom endpoints
+    if base_url:
+        completion_kwargs["api_base"] = base_url
+    if api_key:
+        completion_kwargs["api_key"] = api_key
+
+    res = completion(**completion_kwargs)
     return "true" in res.choices[0].message.content.lower()
 
 
 def reflect(
-    model: str, provider: str, response: str, messages: List[Dict[str, Any]]
+    model: str,
+    provider: str,
+    response: str,
+    messages: List[Dict[str, Any]],
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    max_tokens: int = 500,
 ) -> str:
     transcript = "\n".join(
         [
-            f"{map_role_label(message['role'])}: {message['content']}"
+            f"{map_role_label(message['role'])}: {message.get('content', '')}"
             for message in messages
         ]
     )
     prompt = f"""You are a supervisor of the Agent in the conversation. You are given a Transcript of a conversation between a (simulated) Customer and an Agent. The Customer generated a Response that was marked as unsatisfactory by you.
 You need to generate a Reflection on what went wrong in the conversation, and propose a new Response that should fix the issues.
 Your answer will be parsed, so do not include any other text than the classification (true or false).
-    
+
 # Transcript:
 {transcript}
 
@@ -258,35 +370,82 @@ Reflection:
 
 Response:
 <the response (this will be parsed and sent to the agent)>"""
-    res = completion(
-        model=model,
-        custom_llm_provider=provider,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    completion_kwargs = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+    }
+
+    # Add custom_llm_provider only for standard providers
+    if provider and provider not in ["dashscope", "openrouter", "local"]:
+        completion_kwargs["custom_llm_provider"] = provider
+
+    # Add base_url and api_key for custom endpoints
+    if base_url:
+        completion_kwargs["api_base"] = base_url
+    if api_key:
+        completion_kwargs["api_key"] = api_key
+
+    res = completion(**completion_kwargs)
     _, response = res.choices[0].message.content.split("Response:")
     return response.strip()
 
 
 class ReflectionUserSimulationEnv(LLMUserSimulationEnv):
-    def __init__(self, model: str, provider: str, max_attempts: int = 2) -> None:
-        self.model = model
-        self.provider = provider
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        max_attempts: int = 2,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        max_tokens: int = 500,
+    ) -> None:
+        super().__init__(
+            model=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
         self.max_attempts = max_attempts
         self.reset()
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         cur_messages = messages.copy()
         initial_response = super().generate_next_message(cur_messages)
-        if verify(self.model, self.provider, initial_response, cur_messages):
+        if verify(
+            self.model,
+            self.provider,
+            {"content": initial_response},
+            cur_messages,
+            self.base_url,
+            self.api_key,
+            self.max_tokens,
+        ):
             return initial_response
         attempts = 1
         while attempts < self.max_attempts:
             new_message = reflect(
-                self.model, self.provider, initial_response, cur_messages
+                self.model,
+                self.provider,
+                initial_response,
+                cur_messages,
+                self.base_url,
+                self.api_key,
+                self.max_tokens,
             )
             cur_messages.append({"role": "user", "content": new_message})
             new_response = super().generate_next_message(cur_messages)
-            if verify(self.model, self.provider, new_response, cur_messages):
+            if verify(
+                self.model,
+                self.provider,
+                {"content": new_response},
+                cur_messages,
+                self.base_url,
+                self.api_key,
+                self.max_tokens,
+            ):
                 return new_response
             attempts += 1
         return initial_response
@@ -319,8 +478,11 @@ class UserStrategy(enum.Enum):
 
 def load_user(
     user_strategy: Union[str, UserStrategy],
-    model: Optional[str] = "gpt-4o",
+    model: Optional[str] = "openai/gpt-oss-20b",
     provider: Optional[str] = None,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    max_tokens: int = 500,
 ) -> BaseUserSimulationEnv:
     if isinstance(user_strategy, str):
         user_strategy = UserStrategy(user_strategy)
@@ -331,23 +493,47 @@ def load_user(
             raise ValueError("LLM user strategy requires a model")
         if provider is None:
             raise ValueError("LLM user strategy requires a model provider")
-        return LLMUserSimulationEnv(model=model, provider=provider)
+        return LLMUserSimulationEnv(
+            model=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
     elif user_strategy == UserStrategy.REACT:
         if model is None:
             raise ValueError("React user strategy requires a model")
         if provider is None:
             raise ValueError("React user strategy requires a model provider")
-        return ReactUserSimulationEnv(model=model, provider=provider)
+        return ReactUserSimulationEnv(
+            model=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
     elif user_strategy == UserStrategy.VERIFY:
         if model is None:
             raise ValueError("Verify user strategy requires a model")
         if provider is None:
             raise ValueError("Verify user strategy requires a model provider")
-        return VerifyUserSimulationEnv(model=model, provider=provider)
+        return VerifyUserSimulationEnv(
+            model=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
     elif user_strategy == UserStrategy.REFLECTION:
         if model is None:
             raise ValueError("Reflection user strategy requires a model")
         if provider is None:
             raise ValueError("Reflection user strategy requires a model provider")
-        return ReflectionUserSimulationEnv(model=model, provider=provider)
+        return ReflectionUserSimulationEnv(
+            model=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
     raise ValueError(f"Unknown user strategy {user_strategy}")

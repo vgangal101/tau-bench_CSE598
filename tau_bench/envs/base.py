@@ -53,6 +53,9 @@ class Env(object):
         user_model: str,
         user_provider: Optional[str] = None,
         task_index: Optional[int] = None,
+        user_base_url: Optional[str] = None,
+        user_api_key: Optional[str] = None,
+        user_max_tokens: int = 500,
     ) -> None:
         super().__init__()
         self.data_load_func = data_load_func
@@ -71,7 +74,12 @@ class Env(object):
         self.wiki = wiki
         self.rules = rules
         self.user = load_user(
-            user_strategy=user_strategy, model=user_model, provider=user_provider
+            user_strategy=user_strategy,
+            model=user_model,
+            provider=user_provider,
+            base_url=user_base_url,
+            api_key=user_api_key,
+            max_tokens=user_max_tokens,
         )
         self.actions: List[Action] = []
 

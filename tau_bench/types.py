@@ -73,7 +73,7 @@ class RunConfig(BaseModel):
     model_provider: str
     user_model_provider: str
     model: str
-    user_model: str = "gpt-4o"
+    user_model: str = "openai/gpt-oss-20b"
     num_trials: int = 1
     env: str = "retail"
     agent_strategy: str = "tool-calling"
@@ -88,3 +88,12 @@ class RunConfig(BaseModel):
     shuffle: int = 0
     user_strategy: str = "llm"
     few_shot_displays_path: Optional[str] = None
+    # New fields for model provider configuration
+    model_base_url: Optional[str] = None
+    model_api_key: Optional[str] = None
+    user_model_base_url: Optional[str] = None
+    user_model_api_key: Optional[str] = None
+    dashscope_region: str = "singapore"
+    # Max tokens configuration
+    max_tokens: int = 1000
+    user_max_tokens: int = 500

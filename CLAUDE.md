@@ -14,18 +14,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pip install -e .
 ```
 
-This installs the package in development mode along with dependencies: `openai`, `mistralai`, `anthropic`, `google-generativeai`, `litellm`, `tenacity`, `termcolor`, and `numpy`.
+This installs the package in development mode along with dependencies: `openai`, `mistralai`, `anthropic`, `google-generativeai`, `litellm`, `tenacity`, `termcolor`, `numpy`, and `python-dotenv`.
 
 ### Environment Variables
 
-Set API keys before running:
+**Setup using .env file (recommended):**
+
+```bash
+# Copy template
+cp .env.template .env
+
+# Edit and add your API keys
+nano .env
+```
+
+**Or set via environment variables:**
 
 ```bash
 export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 export GOOGLE_API_KEY=...
 export MISTRAL_API_KEY=...
+export DASHSCOPE_API_KEY=...  # For DashScope Qwen models
+export OPENROUTER_API_KEY=... # For OpenRouter Qwen models
 ```
+
+All API keys are loaded automatically by the framework using `python-dotenv`. The .env file is included in .gitignore and should never be committed to version control.
 
 ## Common Commands
 
@@ -46,17 +60,145 @@ python run.py --agent-strategy tool-calling --env airline --model gpt-4o --model
 
 ### Key Flags
 
+**Environment & Strategy:**
 - `--env`: Choose `retail` or `airline`
 - `--agent-strategy`: `tool-calling`, `act`, `react`, or `few-shot`
 - `--user-strategy`: `llm`, `react`, `verify`, `reflection`, or `human`
-- `--model`, `--model-provider`: Agent model and provider
-- `--user-model`, `--user-model-provider`: User simulator model and provider
+
+**Model Configuration:**
+- `--model MODEL_NAME`: Agent model name
+- `--model-provider PROVIDER`: Agent provider (openai, anthropic, dashscope, openrouter, local)
+- `--model-base-url URL`: Custom API endpoint for agent (for local/custom deployments)
+- `--model-api-key KEY`: Override API key for agent
+- `--max-tokens INT`: Max tokens for agent responses (default: 1000)
+
+**User Simulator Configuration:**
+- `--user-model MODEL_NAME`: User model (default: openai/gpt-oss-20b)
+- `--user-model-provider PROVIDER`: User provider
+- `--user-model-base-url URL`: Custom API endpoint for user
+- `--user-model-api-key KEY`: Override API key for user
+- `--user-max-tokens INT`: Max tokens for user responses (default: 500)
+
+**Provider-Specific:**
+- `--dashscope-region {singapore|us}`: DashScope endpoint region (default: singapore)
+
+**Task Selection & Execution:**
 - `--task-ids`: Run only specific task IDs
 - `--task-split`: `train`, `test`, or `dev` (retail only)
 - `--num-trials`: Run each task multiple times
 - `--max-concurrency`: Number of parallel tasks
 - `--seed`: Random seed for reproducibility
 - `--temperature`: Sampling temperature (default 0.0)
+
+### Qwen Model Integration
+
+τ-bench now supports Qwen models from multiple sources:
+
+#### DashScope (Alibaba Cloud)
+
+Use Qwen models via Alibaba's DashScope API:
+
+**Available models:** `qwen3-4b`, `qwen3-8b`, `qwen3-14b`, `qwen3-32b`
+
+**Setup:**
+1. Get API key from https://dashscope.console.aliyun.com/
+2. Add to .env file: `DASHSCOPE_API_KEY=sk-...`
+
+**Usage:**
+```bash
+python run.py \
+  --env retail \
+  --model qwen3-8b \
+  --model-provider dashscope \
+  --dashscope-region singapore \  # or 'us'
+  --user-model openai/gpt-oss-20b \
+  --user-model-provider openrouter
+```
+
+**Regions:**
+- `singapore`: International endpoint (default)
+- `us`: US data center
+
+#### OpenRouter
+
+Use Qwen and other models via OpenRouter API:
+
+**Available models:** `qwen/qwen3-4b`, `qwen/qwen3-8b`, `qwen/qwen3-14b`, `qwen/qwen3-32b`, `openai/gpt-oss-20b`
+
+**Setup:**
+1. Get API key from https://openrouter.ai/
+2. Add to .env file: `OPENROUTER_API_KEY=sk-or-v1-...`
+
+**Usage:**
+```bash
+python run.py \
+  --env airline \
+  --model qwen/qwen3-32b \
+  --model-provider openrouter \
+  --user-model openai/gpt-oss-20b \
+  --user-model-provider openrouter
+```
+
+**Note:** `openai/gpt-oss-20b` is now the default user simulator model.
+
+#### Local/Self-Hosted Qwen Models
+
+Run with locally deployed Qwen models:
+
+**Usage:**
+```bash
+python run.py \
+  --env retail \
+  --model qwen3-8b \
+  --model-provider local \
+  --model-base-url http://localhost:8000/v1 \
+  --model-api-key "dummy-key" \
+  --user-model qwen3-4b \
+  --user-model-provider local \
+  --user-model-base-url http://localhost:8001/v1
+```
+
+This allows running different Qwen models on different servers/ports.
+
+### Running Examples with Qwen Models
+
+**DashScope agent + OpenRouter user:**
+```bash
+python run.py \
+  --env retail \
+  --agent-strategy tool-calling \
+  --model qwen3-8b \
+  --model-provider dashscope \
+  --user-model openai/gpt-oss-20b \
+  --user-model-provider openrouter \
+  --max-tokens 1000 \
+  --user-max-tokens 500 \
+  --max-concurrency 5
+```
+
+**All OpenRouter:**
+```bash
+python run.py \
+  --env airline \
+  --agent-strategy react \
+  --model qwen/qwen3-32b \
+  --model-provider openrouter \
+  --user-model openai/gpt-oss-20b \
+  --user-model-provider openrouter \
+  --max-concurrency 10
+```
+
+**Local Qwen models:**
+```bash
+python run.py \
+  --env retail \
+  --model qwen3-8b \
+  --model-provider local \
+  --model-base-url http://192.168.1.50:8000/v1 \
+  --user-model openai/gpt-oss-20b \
+  --user-model-provider openrouter \
+  --max-concurrency 1
+```
 
 ### Auto Error Identification
 
@@ -190,6 +332,34 @@ Result: 1.0 if both checks pass, 0.0 otherwise
 6. Register in environment factory in `tau_bench/envs/__init__.py`
 7. Add choice to `--env` argument in `run.py`
 
+### Adding a New Model Provider
+
+1. Create provider config in `tau_bench/model_utils/providers/`:
+   ```python
+   # new_provider.py
+   class NewProviderConfig:
+       BASE_URL = "https://api.newprovider.com/v1"
+       MODELS = ["model-1", "model-2"]
+
+       @staticmethod
+       def get_api_key():
+           return os.getenv("NEWPROVIDER_API_KEY")
+   ```
+
+2. Update `setup_provider()` in `tau_bench/model_utils/providers/__init__.py`:
+   ```python
+   if model in NewProviderConfig.MODELS or provider == "newprovider":
+       api_key = api_key_override or NewProviderConfig.get_api_key()
+       endpoint = base_url or NewProviderConfig.BASE_URL
+       return (endpoint, api_key)
+   ```
+
+3. Add API key to .env.template
+
+4. Document in CLAUDE.md
+
+No changes needed to agents, user simulators, or core logic - the provider system handles everything.
+
 ## Important Data Structures
 
 ### Core Types (`tau_bench/types.py`)
@@ -223,3 +393,55 @@ To verify tasks are correctly defined, check:
 - All expected actions are semantically valid for the domain
 - Ground truth outputs match the domain knowledge
 - Task instructions are clear and unambiguous
+
+## Important Implementation Details
+
+### Response Format Normalization
+
+Qwen models with thinking/reasoning modes return responses in different formats:
+- **OpenRouter**: `message.reasoning` field + `message.content`
+- **DashScope**: May use `<think>` tags in content
+- **Standard models**: Just `message.content`
+
+τ-bench automatically normalizes these formats using `response_parser.py` (`tau_bench/model_utils/response_parser.py`):
+- Extracts clean content (thinking removed)
+- Preserves thinking in metadata for debugging
+- Ensures consistent behavior across all providers
+
+### Max Tokens Configuration
+
+All model calls now include `max_tokens` parameter:
+- **Agent models**: Default 1000 tokens (configurable via `--max-tokens`)
+- **User simulator**: Default 500 tokens (configurable via `--user-max-tokens`)
+
+This ensures:
+- Qwen thinking/reasoning modes have enough space
+- Costs remain predictable
+- Responses don't get truncated mid-thought
+
+### Provider Setup
+
+The `setup_provider()` utility (`tau_bench/model_utils/providers/`) automatically:
+- Detects provider from model name (e.g., "qwen3-8b" → DashScope)
+- Selects appropriate API endpoint (with region support for DashScope)
+- Loads API keys from environment
+- Returns configuration for litellm
+
+This allows seamless switching between providers without code changes.
+
+### Provider Details
+
+**DashScope:**
+- Detects models: `qwen3-4b`, `qwen3-8b`, `qwen3-14b`, `qwen3-32b`
+- Regional endpoints: `singapore` (default), `us`
+- API key: `DASHSCOPE_API_KEY`
+
+**OpenRouter:**
+- Detects models: `qwen/qwen3-*`, `openai/gpt-oss-20b`
+- Single endpoint: `https://openrouter.ai/api/v1`
+- API key: `OPENROUTER_API_KEY`
+
+**Local:**
+- Provider: `local`
+- Requires `--model-base-url` (e.g., `http://localhost:8000/v1`)
+- Uses dummy key by default

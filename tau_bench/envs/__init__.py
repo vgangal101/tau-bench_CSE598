@@ -12,6 +12,9 @@ def get_env(
     task_split: str,
     user_provider: Optional[str] = None,
     task_index: Optional[int] = None,
+    user_base_url: Optional[str] = None,
+    user_api_key: Optional[str] = None,
+    user_max_tokens: int = 500,
 ) -> Env:
     if env_name == "retail":
         from tau_bench.envs.retail import MockRetailDomainEnv
@@ -22,6 +25,9 @@ def get_env(
             task_split=task_split,
             user_provider=user_provider,
             task_index=task_index,
+            user_base_url=user_base_url,
+            user_api_key=user_api_key,
+            user_max_tokens=user_max_tokens,
         )
     elif env_name == "airline":
         from tau_bench.envs.airline import MockAirlineDomainEnv
@@ -32,6 +38,9 @@ def get_env(
             task_split=task_split,
             user_provider=user_provider,
             task_index=task_index,
+            user_base_url=user_base_url,
+            user_api_key=user_api_key,
+            user_max_tokens=user_max_tokens,
         )
     else:
         raise ValueError(f"Unknown environment: {env_name}")

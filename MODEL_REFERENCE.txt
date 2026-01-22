@@ -1,0 +1,196 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                   τ-bench Qwen Models - Quick Reference                        ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════════════
+1. ALIBABA DASHSCOPE - Singapore (Default)
+═══════════════════════════════════════════════════════════════════════════════
+
+Model Size    Model Name        Model ID        Quick Command
+─────────────────────────────────────────────────────────────────────────────
+4B            Qwen3-4B          qwen3-4b        
+8B            Qwen3-8B          qwen3-8b        ← RECOMMENDED START
+14B           Qwen3-14B         qwen3-14b       ← Better reasoning
+32B           Qwen3-32B         qwen3-32b       ← Best quality
+
+Setup: DASHSCOPE_API_KEY from https://dashscope.console.aliyun.com/
+CLI: --model qwen3-8b --model-provider dashscope --dashscope-region singapore
+Script: ./run_examples.sh dashscope-sg-8b
+
+═══════════════════════════════════════════════════════════════════════════════
+2. ALIBABA DASHSCOPE - US
+═══════════════════════════════════════════════════════════════════════════════
+
+Model Size    Model Name        Model ID        Quick Command
+─────────────────────────────────────────────────────────────────────────────
+8B            Qwen3-8B          qwen3-8b        
+32B           Qwen3-32B         qwen3-32b       
+
+Setup: Same DASHSCOPE_API_KEY
+CLI: --model qwen3-8b --model-provider dashscope --dashscope-region us
+Script: ./run_examples.sh dashscope-us-8b
+
+═══════════════════════════════════════════════════════════════════════════════
+3. OPENROUTER - Any Region
+═══════════════════════════════════════════════════════════════════════════════
+
+Model Size    Model Name        Model ID              Quick Command
+─────────────────────────────────────────────────────────────────────────────
+4B            Qwen3-4B          qwen/qwen3-4b         
+8B            Qwen3-8B          qwen/qwen3-8b         
+14B           Qwen3-14B         qwen/qwen3-14b        
+32B           Qwen3-32B         qwen/qwen3-32b        
+20B           GPT-OSS-20B       openai/gpt-oss-20b    ← New option
+
+Setup: OPENROUTER_API_KEY from https://openrouter.ai/
+CLI: --model qwen/qwen3-8b --model-provider openrouter
+Script: ./run_examples.sh openrouter-8b
+
+═══════════════════════════════════════════════════════════════════════════════
+4. LOCAL / SELF-HOSTED
+═══════════════════════════════════════════════════════════════════════════════
+
+Deployment Type   Example                    Command
+──────────────────────────────────────────────────────────────────────────────
+Single Server     localhost:8000             --model-base-url http://localhost:8000/v1
+Remote Server     192.168.1.50:8000          --model-base-url http://192.168.1.50:8000/v1
+With Auth         server:8000/token          --model-api-key YOUR_AUTH_TOKEN
+Dual Servers      8000 & 8001                Agent on 8000, User on 8001
+
+Setup: Start server with OpenAI-compatible API (vLLM, LM Studio, etc.)
+CLI: --model qwen3-8b --model-provider local --model-base-url http://localhost:8000/v1
+Script: ./run_examples.sh local-8000 or local-dual or local-remote
+
+═══════════════════════════════════════════════════════════════════════════════
+QUICK START COMMANDS
+═══════════════════════════════════════════════════════════════════════════════
+
+# Using convenience script (EASIEST)
+./run_examples.sh dashscope-sg-8b                    # DashScope Singapore 8B
+./run_examples.sh dashscope-us-32b                   # DashScope US 32B
+./run_examples.sh openrouter-8b                      # OpenRouter 8B
+./run_examples.sh local-8000                         # Local model
+
+# Or direct python commands
+python run.py --model qwen3-8b --model-provider dashscope \
+  --dashscope-region singapore --user-model openai/gpt-oss-20b \
+  --user-model-provider openrouter
+
+═══════════════════════════════════════════════════════════════════════════════
+USER SIMULATOR MODEL (Default)
+═══════════════════════════════════════════════════════════════════════════════
+
+Default User Model: openai/gpt-oss-20b (OpenRouter)
+Can be overridden: --user-model MODEL --user-model-provider PROVIDER
+
+═══════════════════════════════════════════════════════════════════════════════
+ENVIRONMENT SETUP (ONE TIME)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Activate environment:
+   conda activate Tau1
+
+2. Create .env file:
+   cp .env.template .env
+   nano .env
+
+3. Add your API keys:
+   DASHSCOPE_API_KEY=sk-...
+   OPENROUTER_API_KEY=sk-or-v1-...
+
+═══════════════════════════════════════════════════════════════════════════════
+COMMON OPTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+--max-concurrency N          Parallel tasks (default: 1)
+--task-ids 0 1 2 3           Run specific tasks
+--num-trials N               Run each task N times
+--task-split test|train|dev  Dataset split (default: test)
+--max-tokens INT             Max agent tokens (default: 1000)
+--user-max-tokens INT        Max user tokens (default: 500)
+--temperature FLOAT          Sampling temperature (default: 0.0)
+
+═══════════════════════════════════════════════════════════════════════════════
+RUNNING MULTIPLE MODELS
+═══════════════════════════════════════════════════════════════════════════════
+
+Run all DashScope Singapore:
+  ./run_examples.sh dashscope-sg-4b
+  ./run_examples.sh dashscope-sg-8b
+  ./run_examples.sh dashscope-sg-14b
+  ./run_examples.sh dashscope-sg-32b
+
+Run all OpenRouter:
+  ./run_examples.sh openrouter-4b
+  ./run_examples.sh openrouter-8b
+  ./run_examples.sh openrouter-14b
+  ./run_examples.sh openrouter-32b
+  ./run_examples.sh openrouter-gpt
+
+═══════════════════════════════════════════════════════════════════════════════
+MIXED CONFIGURATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+DashScope Agent + OpenRouter User:
+  python run.py --model qwen3-8b --model-provider dashscope \
+    --user-model openai/gpt-oss-20b --user-model-provider openrouter
+
+OpenRouter Agent + Local User:
+  python run.py --model qwen/qwen3-14b --model-provider openrouter \
+    --user-model qwen3-4b --user-model-provider local \
+    --user-model-base-url http://localhost:8001/v1
+
+Local Agent + DashScope User (US):
+  python run.py --model qwen3-8b --model-provider local \
+    --model-base-url http://localhost:8000/v1 \
+    --user-model qwen3-4b --user-model-provider dashscope \
+    --dashscope-region us
+
+═══════════════════════════════════════════════════════════════════════════════
+CHECKING RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+List all results:
+  ls -lh results/
+
+View latest result:
+  cat results/*.json | tail -1 | jq '.'
+
+Calculate average reward:
+  cat results/*.json | jq '.[].reward' | awk '{s+=$1;c++} END {print "Avg:",s/c}'
+
+═══════════════════════════════════════════════════════════════════════════════
+TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Error: DASHSCOPE_API_KEY not set
+  → Add to .env: DASHSCOPE_API_KEY=sk-...
+
+Error: Connection refused (localhost:8000)
+  → Start local server: python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen-3-8B --port 8000
+
+Error: Model not found
+  → Check spelling: qwen3-8b (not qwen-3-8b)
+  → For OpenRouter: qwen/qwen3-8b (with prefix)
+
+═══════════════════════════════════════════════════════════════════════════════
+DOCUMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+QUICKSTART.md              → Start here (5 minutes)
+EXAMPLES.md                → 24 detailed examples
+CLAUDE.md                  → Architecture & design
+IMPLEMENTATION_SUMMARY.md  → Technical overview
+run_examples.sh --help     → Script help
+python run.py --help       → All CLI arguments
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Ready to benchmark? Start with:
+  conda activate Tau1
+  cp .env.template .env
+  nano .env    # Add your API keys
+  ./run_examples.sh dashscope-sg-8b
+
+🚀 Happy Benchmarking!

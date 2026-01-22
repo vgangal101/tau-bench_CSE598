@@ -19,8 +19,9 @@ from tau_bench.envs.user import UserStrategy
 
 def run(config: RunConfig) -> List[EnvRunResult]:
     assert config.env in ["retail", "airline"], "Only retail and airline envs are supported"
-    assert config.model_provider in provider_list, "Invalid model provider"
-    assert config.user_model_provider in provider_list, "Invalid user model provider"
+    # Provider validation is now more flexible to support custom providers (dashscope, openrouter, local)
+    assert config.model_provider is not None, "model_provider is required"
+    assert config.user_model_provider is not None, "user_model_provider is required"
     assert config.agent_strategy in ["tool-calling", "act", "react", "few-shot"], "Invalid agent strategy"
     assert config.task_split in ["train", "test", "dev"], "Invalid task split"
     assert config.user_strategy in [item.value for item in UserStrategy], "Invalid user strategy"
@@ -31,13 +32,28 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     if not os.path.exists(config.log_dir):
         os.makedirs(config.log_dir)
 
+    from tau_bench.model_utils.providers import setup_provider
+
     print(f"Loading user with strategy: {config.user_strategy}")
+
+    # Set up provider configuration for user model
+    user_base_url, user_api_key = setup_provider(
+        provider=config.user_model_provider,
+        model=config.user_model,
+        base_url=config.user_model_base_url,
+        api_key_override=config.user_model_api_key,
+        dashscope_region=config.dashscope_region,
+    )
+
     env = get_env(
         config.env,
         user_strategy=config.user_strategy,
         user_model=config.user_model,
         user_provider=config.user_model_provider,
         task_split=config.task_split,
+        user_base_url=user_base_url,
+        user_api_key=user_api_key,
+        user_max_tokens=config.user_max_tokens,
     )
     agent = agent_factory(
         tools_info=env.tools_info,
@@ -71,6 +87,9 @@ def run(config: RunConfig) -> List[EnvRunResult]:
                 task_split=config.task_split,
                 user_provider=config.user_model_provider,
                 task_index=idx,
+                user_base_url=user_base_url,
+                user_api_key=user_api_key,
+                user_max_tokens=config.user_max_tokens,
             )
 
             print(f"Running task {idx}")
@@ -124,6 +143,17 @@ def run(config: RunConfig) -> List[EnvRunResult]:
 def agent_factory(
     tools_info: List[Dict[str, Any]], wiki, config: RunConfig
 ) -> Agent:
+    from tau_bench.model_utils.providers import setup_provider
+
+    # Set up provider configuration for agent model
+    base_url, api_key = setup_provider(
+        provider=config.model_provider,
+        model=config.model,
+        base_url=config.model_base_url,
+        api_key_override=config.model_api_key,
+        dashscope_region=config.dashscope_region,
+    )
+
     if config.agent_strategy == "tool-calling":
         # native tool calling
         from tau_bench.agents.tool_calling_agent import ToolCallingAgent
@@ -134,6 +164,9 @@ def agent_factory(
             model=config.model,
             provider=config.model_provider,
             temperature=config.temperature,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=config.max_tokens,
         )
     elif config.agent_strategy == "act":
         # `act` from https://arxiv.org/abs/2210.03629
@@ -146,6 +179,9 @@ def agent_factory(
             provider=config.model_provider,
             use_reasoning=False,
             temperature=config.temperature,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=config.max_tokens,
         )
     elif config.agent_strategy == "react":
         # `react` from https://arxiv.org/abs/2210.03629
@@ -158,6 +194,9 @@ def agent_factory(
             provider=config.model_provider,
             use_reasoning=True,
             temperature=config.temperature,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=config.max_tokens,
         )
     elif config.agent_strategy == "few-shot":
         from tau_bench.agents.few_shot_agent import FewShotToolCallingAgent
@@ -172,6 +211,9 @@ def agent_factory(
             provider=config.model_provider,
             few_shot_displays=few_shot_displays,
             temperature=config.temperature,
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=config.max_tokens,
         )
     else:
         raise ValueError(f"Unknown agent strategy: {config.agent_strategy}")

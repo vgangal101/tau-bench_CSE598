@@ -13,10 +13,13 @@ class MockRetailDomainEnv(Env):
     def __init__(
         self,
         user_strategy: Union[str, UserStrategy] = UserStrategy.LLM,
-        user_model: str = "gpt-4o",
+        user_model: str = "openai/gpt-oss-20b",
         user_provider: Optional[str] = None,
         task_split: str = "test",
         task_index: Optional[int] = None,
+        user_base_url: Optional[str] = None,
+        user_api_key: Optional[str] = None,
+        user_max_tokens: int = 500,
     ):
         match task_split:
             case "test":
@@ -37,5 +40,8 @@ class MockRetailDomainEnv(Env):
             user_model=user_model,
             user_provider=user_provider,
             task_index=task_index,
+            user_base_url=user_base_url,
+            user_api_key=user_api_key,
+            user_max_tokens=user_max_tokens,
         )
         self.terminate_tools = ["transfer_to_human_agents"]
