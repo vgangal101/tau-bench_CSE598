@@ -28,7 +28,10 @@ def run(config: RunConfig) -> List[EnvRunResult]:
 
     random.seed(config.seed)
     time_str = datetime.now().strftime("%m%d%H%M%S")
-    ckpt_path = f"{config.log_dir}/{config.agent_strategy}-{config.model.split('/')[-1]}-{config.temperature}_range_{config.start_index}-{config.end_index}_user-{config.user_model}-{config.user_strategy}_{time_str}.json"
+    # Sanitize model names for file path (replace / with _)
+    model_safe = config.model.replace('/', '_')
+    user_model_safe = config.user_model.replace('/', '_')
+    ckpt_path = f"{config.log_dir}/{config.agent_strategy}-{model_safe}-{config.temperature}_range_{config.start_index}-{config.end_index}_user-{user_model_safe}-{config.user_strategy}_{time_str}.json"
     if not os.path.exists(config.log_dir):
         os.makedirs(config.log_dir)
 
@@ -37,7 +40,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     print(f"Loading user with strategy: {config.user_strategy}")
 
     # Set up provider configuration for user model
-    user_base_url, user_api_key = setup_provider(
+    user_base_url, user_api_key, user_formatted_model = setup_provider(
         provider=config.user_model_provider,
         model=config.user_model,
         base_url=config.user_model_base_url,
@@ -48,7 +51,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     env = get_env(
         config.env,
         user_strategy=config.user_strategy,
-        user_model=config.user_model,
+        user_model=user_formatted_model,
         user_provider=config.user_model_provider,
         task_split=config.task_split,
         user_base_url=user_base_url,
@@ -83,7 +86,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
             isolated_env = get_env(
                 config.env,
                 user_strategy=config.user_strategy,
-                user_model=config.user_model,
+                user_model=user_formatted_model,
                 task_split=config.task_split,
                 user_provider=config.user_model_provider,
                 task_index=idx,
@@ -146,7 +149,7 @@ def agent_factory(
     from tau_bench.model_utils.providers import setup_provider
 
     # Set up provider configuration for agent model
-    base_url, api_key = setup_provider(
+    base_url, api_key, formatted_model = setup_provider(
         provider=config.model_provider,
         model=config.model,
         base_url=config.model_base_url,
@@ -161,7 +164,7 @@ def agent_factory(
         return ToolCallingAgent(
             tools_info=tools_info,
             wiki=wiki,
-            model=config.model,
+            model=formatted_model,
             provider=config.model_provider,
             temperature=config.temperature,
             base_url=base_url,
@@ -175,7 +178,7 @@ def agent_factory(
         return ChatReActAgent(
             tools_info=tools_info,
             wiki=wiki,
-            model=config.model,
+            model=formatted_model,
             provider=config.model_provider,
             use_reasoning=False,
             temperature=config.temperature,
@@ -190,7 +193,7 @@ def agent_factory(
         return ChatReActAgent(
             tools_info=tools_info,
             wiki=wiki,
-            model=config.model,
+            model=formatted_model,
             provider=config.model_provider,
             use_reasoning=True,
             temperature=config.temperature,
@@ -207,7 +210,7 @@ def agent_factory(
         return FewShotToolCallingAgent(
             tools_info=tools_info,
             wiki=wiki,
-            model=config.model,
+            model=formatted_model,
             provider=config.model_provider,
             few_shot_displays=few_shot_displays,
             temperature=config.temperature,
