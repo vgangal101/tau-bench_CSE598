@@ -7,8 +7,8 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=32G
 #SBATCH --time=12:00:00
-#SBATCH --output=day1_exp_%j.out
-#SBATCH --error=day1_exp_%j.err
+#SBATCH --output=logs/day1_exp_%j.out
+#SBATCH --error=logs/day1_exp_%j.err
 
 echo "=== Day 1 Experiments Started at $(date) ==="
 echo "Experiment: User (GPT-OSS-20B) + Agent (Qwen-4B)"

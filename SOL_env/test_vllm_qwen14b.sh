@@ -7,8 +7,8 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=64G
 #SBATCH --time=06:00:00
-#SBATCH --output=vllm_14b_%j.out
-#SBATCH --error=vllm_14b_%j.err
+#SBATCH --output=logs/vllm_14b_%j.out
+#SBATCH --error=logs/vllm_14b_%j.err
 
 echo "=== vLLM Server Started at $(date) ==="
 echo "Model: Qwen3-14B (Agent)"

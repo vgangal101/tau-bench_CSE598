@@ -7,8 +7,8 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=48G
 #SBATCH --time=06:00:00
-#SBATCH --output=vllm_gpt_oss_20b_%j.out
-#SBATCH --error=vllm_gpt_oss_20b_%j.err
+#SBATCH --output=logs/vllm_gpt_oss_20b_%j.out
+#SBATCH --error=logs/vllm_gpt_oss_20b_%j.err
 
 echo "=== vLLM Server Started at $(date) ==="
 echo "Model: GPT-OSS-20B (User Simulator)"

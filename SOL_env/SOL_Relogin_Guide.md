@@ -17,6 +17,10 @@ module load mamba/latest
 source activate tau-bench
 ```
 
+## incase there are old log files
+mv *.out *.err test_logs/
+
+
 ## 4. Check Status
 ```bash
 # See what jobs are running
@@ -44,7 +48,7 @@ sbatch test_vllm_qwen32b.sh
 Watch for "Application startup complete" to know when the server is ready.
 ```bash
 # Replace <job_id> with the actual job ID
-tail -f vllm_gpt_oss_20b_*.out
+tail -f logs/vllm_gpt_oss_20b_*.out
 ```
 *Press `Ctrl+C` to stop watching the log.*
 
