@@ -75,6 +75,16 @@ def parse_args() -> RunConfig:
         type=str,
         help="The base URL for the API (sets OPENAI_API_BASE)",
     )
+    parser.add_argument(
+        "--model-base-url",
+        type=str,
+        help="The base URL for the model (overrides OPENAI_API_BASE)",
+    )
+    parser.add_argument(
+        "--user-model-base-url",
+        type=str,
+        help="The base URL for the user model",
+    )
     args = parser.parse_args()
     if args.api_base:
         os.environ["OPENAI_API_BASE"] = args.api_base
@@ -98,6 +108,8 @@ def parse_args() -> RunConfig:
         shuffle=args.shuffle,
         user_strategy=args.user_strategy,
         few_shot_displays_path=args.few_shot_displays_path,
+        model_base_url=args.model_base_url,
+        user_model_base_url=args.user_model_base_url,
     )
 
 

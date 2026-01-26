@@ -47,3 +47,37 @@ Watch for "Application startup complete" to know when the server is ready.
 tail -f vllm_gpt_oss_20b_*.out
 ```
 *Press `Ctrl+C` to stop watching the log.*
+
+## 7. Run Experiments (Day 1)
+**CRITICAL:** You must find the NODE NAMES where your models are running before you can start experiments.
+
+### Step 7a: Find Node Names
+Run `squeue -u $USER` and look at the **NODELIST(REASON)** column.
+
+Example output:
+```
+JOBID   PARTITIO NAME     USER      ST  TIME  NODES NODELIST(REASON)
+12345   public   vllm-gpt hehernan  R   0:05  1     sg001
+12346   public   vllm-4b  hehernan  R   0:05  1     sg002
+```
+In this example:
+- **User Node (GPT-OSS-20B):** `sg001`
+- **Agent Node (Qwen-4B):** `sg002`
+
+### Step 7b: Export Variables
+Run these commands in your terminal (replace with YOUR actual node names):
+
+```bash
+export USER_NODE=sg001
+export AGENT_NODE_4B=sg002
+```
+
+### Step 7c: Run Day 1 Script
+```bash
+sbatch day1_experiments.sh
+```
+
+To see the results later:
+```bash
+tail -f day1_exp_*.out
+```
