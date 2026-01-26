@@ -1,17 +1,17 @@
 #!/bin/bash
-#SBATCH --job-name=vllm-user-4b
+#SBATCH --job-name=vllm-gpt-oss-20b
 #SBATCH --partition=public
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --time=06:00:00
-#SBATCH --output=vllm_user_4b_%j.out
-#SBATCH --error=vllm_user_4b_%j.err
+#SBATCH --output=vllm_gpt_oss_20b_%j.out
+#SBATCH --error=vllm_gpt_oss_20b_%j.err
 
 echo "=== vLLM Server Started at $(date) ==="
-echo "Model: Qwen3-4B (User Simulator)"
+echo "Model: GPT-OSS-20B (User Simulator)"
 echo "Port: 8000"
 echo "Node: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -27,7 +27,7 @@ nvidia-smi
 
 echo "=== Starting vLLM Server ==="
 
-vllm serve Qwen/Qwen3-4B \
+vllm serve openai/gpt-oss-20b \
     --host 0.0.0.0 \
     --port 8000 \
     --tensor-parallel-size 1 \
