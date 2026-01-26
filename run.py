@@ -1,5 +1,6 @@
 # Copyright Sierra
 
+import os
 import argparse
 from tau_bench.types import RunConfig
 from tau_bench.run import run
@@ -27,7 +28,7 @@ def parse_args() -> RunConfig:
     parser.add_argument(
         "--user-model",
         type=str,
-        default="gpt-4o",
+        default="qwen-32b",
         help="The model to use for the user simulator",
     )
     parser.add_argument(
@@ -69,7 +70,14 @@ def parse_args() -> RunConfig:
     parser.add_argument("--shuffle", type=int, default=0)
     parser.add_argument("--user-strategy", type=str, default="llm", choices=[item.value for item in UserStrategy])
     parser.add_argument("--few-shot-displays-path", type=str, help="Path to a jsonlines file containing few shot displays")
+    parser.add_argument(
+        "--api-base",
+        type=str,
+        help="The base URL for the API (sets OPENAI_API_BASE)",
+    )
     args = parser.parse_args()
+    if args.api_base:
+        os.environ["OPENAI_API_BASE"] = args.api_base
     print(args)
     return RunConfig(
         model_provider=args.model_provider,
