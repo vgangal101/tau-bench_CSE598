@@ -88,9 +88,19 @@ def message_to_action(
 ) -> Action:
     if "tool_calls" in message and message["tool_calls"] is not None and len(message["tool_calls"]) > 0 and message["tool_calls"][0]["function"] is not None:
         tool_call = message["tool_calls"][0]
+        # Handle empty or malformed arguments
+        args_str = tool_call["function"]["arguments"]
+        if not args_str or args_str.strip() == "":
+            kwargs = {}
+        else:
+            try:
+                kwargs = json.loads(args_str)
+            except json.JSONDecodeError:
+                # If JSON parsing fails, use empty dict
+                kwargs = {}
         return Action(
             name=tool_call["function"]["name"],
-            kwargs=json.loads(tool_call["function"]["arguments"]),
+            kwargs=kwargs,
         )
     else:
         return Action(name=RESPOND_ACTION_NAME, kwargs={"content": message["content"]})
