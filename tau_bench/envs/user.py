@@ -33,7 +33,7 @@ class HumanUserSimulationEnv(BaseUserSimulationEnv):
     def get_total_cost(self) -> float:
         return 0
 
-
+# Need to modify VLLM into this or stand it up externally
 class LLMUserSimulationEnv(BaseUserSimulationEnv):
     def __init__(self, model: str, provider: str) -> None:
         super().__init__()
