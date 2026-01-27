@@ -4,9 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:a100:1
-#SBATCH --mem=32G
-#SBATCH --time=12:00:00
+#SBATCH --mem=16G
+#SBATCH --time=06:00:00
 #SBATCH --output=logs/day1_exp_%j.out
 #SBATCH --error=logs/day1_exp_%j.err
 
