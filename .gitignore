@@ -5,3 +5,8 @@ results/**
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+
+# some files to ignore for the team
+.env
+.claude
