@@ -6,8 +6,8 @@
             "request": "launch",
             "program": "run.py",
             "console": "integratedTerminal",
-            "args": "--model-provider vllm --user-model-provider vllm --model Qwen3/Qwen3-0.6B",
-            "justMyCode": false,
+            "args": "--model-provider vllm --user-model-provider vllm --model Qwen3/Qwen3-0.6B --user-model Qwen/Qwen3-0.6B --agent-strategy react",
+            //"justMyCode": false,
         }
     ]
 }
