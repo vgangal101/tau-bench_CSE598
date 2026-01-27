@@ -13,6 +13,7 @@ from tau_bench.types import (
 )
 from typing import Optional, List, Dict, Any, Tuple
 
+QWEN_MAX_TOKENS = 32768
 
 class ChatReActAgent(Agent):
     def __init__(
