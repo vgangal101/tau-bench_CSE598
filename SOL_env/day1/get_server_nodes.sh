@@ -2,11 +2,11 @@
 
 # Get the job IDs for the most recent submissions (you might need to adjust logic if you have many jobs)
 # This assumes tasks are named specific things
-USER_JOB=$(squeue --me --name=vllm-gpt-oss-20b --noheader --format=%i | head -n 1)
+USER_JOB=$(squeue --me --name=vllm-qwen-32b --noheader --format=%i | head -n 1)
 AGENT_JOB=$(squeue --me --name=vllm-4b --noheader --format=%i | head -n 1)
 
 if [ -z "$USER_JOB" ]; then
-    echo "User server job (vllm-gpt-oss-20b) not found running."
+    echo "User server job (vllm-qwen-32b) not found running."
 else
     USER_NODE=$(squeue -j $USER_JOB --noheader --format=%N)
     echo "USER server is on node: $USER_NODE (Job $USER_JOB)"

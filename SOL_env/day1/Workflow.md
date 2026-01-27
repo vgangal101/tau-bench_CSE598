@@ -1,9 +1,9 @@
 # Day 1 Experiments Workflow
 
 ## Step 1: Start vLLM Servers (Separate Jobs)
-Submit the SLURM jobs to start the User Simulator (GPT-OSS-20B) on port 8000 and the Agent (Qwen-4B) on port 8001.
+Submit the SLURM jobs to start the User Simulator (Qwen2.5-32B) on port 8000 and the Agent (Qwen-4B) on port 8001.
 ```bash
-sbatch vllm_gpt_oss_20b.sh    # User on port 8000
+sbatch vllm_qwen3_32b.sh      # User on port 8000
 sbatch test_vllm_qwen4b.sh    # Agent on port 8001
 
 # Monitor status
@@ -102,7 +102,7 @@ squeue -p public | grep gpu
 ### Servers Don't Start
 ```bash
 # Check server logs for errors
-tail -50 vllm_gpt_oss_20b_*.err
+tail -50 vllm_qwen_32b_*.err
 tail -50 vllm_4b_*.err
 
 # Common issues:

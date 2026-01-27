@@ -10,7 +10,7 @@
 #SBATCH --error=logs/day1_exp_%j.err
 
 echo "=== Day 1 Experiments Started at $(date) ==="
-echo "Experiment: User (GPT-OSS-20B) + Agent (Qwen-4B)"
+echo "Experiment: User (Qwen2.5-32B) + Agent (Qwen-4B)"
 echo "Strategies: tool-calling, act, react"
 echo "Envs: retail, airline"
 
@@ -75,7 +75,7 @@ for ENV in retail airline; do
             --model qwen \
             --model-provider openai \
             --model-base-url ${AGENT_URL} \
-            --user-model gpt-oss \
+            --user-model qwen2.5-32b \
             --user-model-provider openai \
             --user-model-base-url ${USER_URL} \
             --log-dir ${LOG_DIR} \
