@@ -79,8 +79,6 @@ for ENV in retail airline; do
             --user-model gpt-oss \
             --user-model-provider openai \
             --user-model-base-url ${USER_URL} \
-            --len-short-traj-displays 2 \
-            --few-shot-displays-path few_shot_data/${ENV}_few_shot_data.jsonl \
             --log-dir ${LOG_DIR} \
             --max-concurrency 5 \
             --num-trials 1 \
