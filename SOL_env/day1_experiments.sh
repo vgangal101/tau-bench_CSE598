@@ -12,7 +12,7 @@
 
 echo "=== Day 1 Experiments Started at $(date) ==="
 echo "Experiment: User (GPT-OSS-20B) + Agent (Qwen-4B)"
-echo "Strategies: tool-calling, act, react, few-shot"
+echo "Strategies: tool-calling, act, react"
 echo "Envs: retail, airline"
 
 # Configuration
@@ -48,7 +48,7 @@ for ENV in retail airline; do
     echo ">>> Running Environment: $ENV"
     
     # Loop through strategies
-    for STRATEGY in tool-calling act react few-shot; do
+    for STRATEGY in tool-calling act react; do
         echo "  > Strategy: $STRATEGY"
         
         # Construct log dir
