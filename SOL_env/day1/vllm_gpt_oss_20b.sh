@@ -21,6 +21,7 @@ module load cuda-12.1.1-gcc-12.1.0
 source activate tau-bench
 
 export HF_HOME=/scratch/$USER/hf_cache
+export VLLM_USE_V1=0
 mkdir -p $HF_HOME
 
 nvidia-smi
@@ -33,6 +34,7 @@ vllm serve openai/gpt-oss-20b \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.9 \
     --max-model-len 4096 \
-    --trust-remote-code
+    --trust-remote-code \
+    --enforce-eager
 
 echo "=== Server Stopped at $(date) ==="
