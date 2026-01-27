@@ -6,6 +6,7 @@ from tau_bench.run import run
 from litellm import provider_list
 from tau_bench.envs.user import UserStrategy
 
+# QWEN3 0.6B 
 
 def parse_args() -> RunConfig:
     parser = argparse.ArgumentParser()
@@ -13,7 +14,7 @@ def parse_args() -> RunConfig:
     parser.add_argument(
         "--env", type=str, choices=["retail", "airline"], default="retail"
     )
-    parser.add_argument(
+    parser.add_argument( # limit choices to be qwen3 models [ qwen3/qwen3-14b, qwen3/qwen3-32b ]
         "--model",
         type=str,
         help="The model to use for the agent",
@@ -21,19 +22,20 @@ def parse_args() -> RunConfig:
     parser.add_argument(
         "--model-provider",
         type=str,
-        choices=provider_list,
+        choices=provider_list, # set to be 'vllm'
         help="The model provider for the agent",
     )
     parser.add_argument(
         "--user-model",
         type=str,
-        default="gpt-4o",
-        help="The model to use for the user simulator",
+        #default='qwen3/qwen3-32b',
+        default="Qwen/Qwen3-0.6B",  # USE THE HUGGINGFACE MODEL NAME TAG 
+        help="The model to use for the user simulator"
     )
     parser.add_argument(
         "--user-model-provider",
         type=str,
-        choices=provider_list,
+        choices=provider_list,  # set to be 'vllm'
         help="The model provider for the user simulator",
     )
     parser.add_argument(

@@ -15,6 +15,7 @@ from tau_bench.agents.base import Agent
 from tau_bench.types import EnvRunResult, RunConfig
 from litellm import provider_list
 from tau_bench.envs.user import UserStrategy
+import litellm
 
 
 def run(config: RunConfig) -> List[EnvRunResult]:
@@ -30,6 +31,9 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     ckpt_path = f"{config.log_dir}/{config.agent_strategy}-{config.model.split('/')[-1]}-{config.temperature}_range_{config.start_index}-{config.end_index}_user-{config.user_model}-{config.user_strategy}_{time_str}.json"
     if not os.path.exists(config.log_dir):
         os.makedirs(config.log_dir)
+    
+    if not os.path.exists(os.path.dirname(ckpt_path)):
+        os.makedirs(os.path.dirname(ckpt_path)) 
 
     print(f"Loading user with strategy: {config.user_strategy}")
     env = get_env(
