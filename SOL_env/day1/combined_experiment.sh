@@ -108,6 +108,8 @@ CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve Qwen/Qwen3-4B \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
     > logs/agent_server_${SLURM_JOB_ID}.log 2>&1 &
 
 AGENT_PID=$!
