@@ -7,8 +7,8 @@
 #SBATCH --gres=gpu:a100:2
 #SBATCH --mem=96G
 #SBATCH --time=08:00:00
-#SBATCH --output=logs/combined_exp_%j.out
-#SBATCH --error=logs/combined_exp_%j.err
+#SBATCH --output=logs/combined_experiment_4b_%j.out
+#SBATCH --error=logs/combined_experiment_4b_%j.err
 
 echo "========================================"
 echo "=== Combined Day 1 Experiments ==="
