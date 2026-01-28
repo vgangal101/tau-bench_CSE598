@@ -88,7 +88,7 @@ CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve Qwen/Qwen2.5-32B-Instruct \
     --port 8000 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.9 \
-    --max-model-len 4096 \
+    --max-model-len 8192 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
@@ -104,7 +104,7 @@ CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve Qwen/Qwen3-4B \
     --port 8001 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.9 \
-    --max-model-len 4096 \
+    --max-model-len 8192 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
