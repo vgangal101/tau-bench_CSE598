@@ -81,9 +81,9 @@ trap cleanup EXIT INT TERM
 echo "=== Step 1: Starting vLLM Servers ==="
 echo ""
 
-# Start User Simulator (Qwen2.5-32B) on GPU 0, port 8000
-echo "[1/2] Starting User Simulator (Qwen2.5-32B) on GPU 0, port 8000..."
-CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve Qwen/Qwen2.5-32B-Instruct \
+# Start User Simulator (Qwen3-32B) on GPU 0, port 8000
+echo "[1/2] Starting User Simulator (Qwen3-32B) on GPU 0, port 8000..."
+CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve Qwen/Qwen3-32B \
     --host 0.0.0.0 \
     --port 8000 \
     --tensor-parallel-size 1 \
@@ -184,7 +184,7 @@ echo ""
 echo "========================================"
 echo "=== Step 3: Running Experiments ==="
 echo "========================================"
-echo "Experiment: User (Qwen2.5-32B) + Agent (Qwen-4B)"
+echo "Experiment: User (Qwen3-32B) + Agent (Qwen-4B)"
 echo "Strategies: tool-calling, act, react"
 echo "Envs: retail, airline"
 echo ""
@@ -229,7 +229,7 @@ for ENV in retail airline; do
             --model Qwen/Qwen3-4B \
             --model-provider openai \
             --model-base-url ${AGENT_URL}/v1 \
-            --user-model Qwen/Qwen2.5-32B-Instruct \
+            --user-model Qwen/Qwen3-32B \
             --user-model-provider openai \
             --user-model-base-url ${USER_URL}/v1 \
             --log-dir ${LOG_DIR} \
