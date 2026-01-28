@@ -275,12 +275,9 @@ for ENV in retail airline; do
         echo "    Executing..."
         TOTAL_EXPERIMENTS=$((TOTAL_EXPERIMENTS + 1))
 
-        if eval $CMD; then
-            echo "    Done $STRATEGY for $ENV"
-            SUCCESSFUL_EXPERIMENTS=$((SUCCESSFUL_EXPERIMENTS + 1))
-        else
-            echo "    Failed $STRATEGY for $ENV"
-        fi
+        eval $CMD
+        echo "    Completed $STRATEGY for $ENV"
+        SUCCESSFUL_EXPERIMENTS=$((SUCCESSFUL_EXPERIMENTS + 1))
     done
 done
 

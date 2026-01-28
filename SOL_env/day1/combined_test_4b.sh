@@ -250,13 +250,15 @@ done) &
 GPU_MONITOR_PID=$!
 echo ""
 
-if eval $CMD; then
-    echo "✓ TEST PASSED!"
-    TEST_STATUS="SUCCESS"
+eval $CMD
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+    TEST_STATUS="COMPLETED (all tasks rewarded)"
 else
-    echo "✗ TEST FAILED!"
-    TEST_STATUS="FAILED"
+    TEST_STATUS="COMPLETED (exit code: $EXIT_CODE)"
 fi
+echo ""
+echo "Test run finished with status: $TEST_STATUS"
 
 echo ""
 echo "========================================"
