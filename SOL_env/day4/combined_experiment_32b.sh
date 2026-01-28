@@ -95,10 +95,10 @@ trap cleanup EXIT INT TERM
 echo "=== Step 1: Starting vLLM Servers (1 GPU per 32B model) ==="
 echo ""
 
-# NOTE on memory: Qwen2.5-32B-Instruct needs ~64GB in fp16.
+# NOTE on memory: Qwen3-32B needs ~64GB in fp16.
 # A100 80GB at 90% = 72GB available. That leaves ~8GB for KV cache.
-# max-model-len 16384 needs ~4GB KV cache (GQA keeps it small).
-# If you hit OOM, reduce max-model-len to 8192 or request 4 GPUs
+# max-model-len 40960 needs ~4GB KV cache (GQA keeps it small).
+# If you hit OOM, reduce max-model-len or request 4 GPUs
 # and use tensor-parallel-size 2 per model.
 
 # Start User Simulator on GPU 0, port 8000
@@ -108,7 +108,7 @@ CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve $USER_MODEL \
     --port 8000 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.90 \
-    --max-model-len 50000 \
+    --max-model-len 40960 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
@@ -139,7 +139,7 @@ CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve $AGENT_MODEL \
     --port 8001 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.90 \
-    --max-model-len 50000 \
+    --max-model-len 40960 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
