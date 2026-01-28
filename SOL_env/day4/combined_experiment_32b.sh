@@ -108,7 +108,7 @@ CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve $USER_MODEL \
     --port 8000 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.90 \
-    --max-model-len 16384 \
+    --max-model-len 50000 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
@@ -139,7 +139,7 @@ CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve $AGENT_MODEL \
     --port 8001 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.90 \
-    --max-model-len 16384 \
+    --max-model-len 50000 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
