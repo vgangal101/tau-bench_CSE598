@@ -194,10 +194,10 @@ echo ">>> Running TEST: retail + tool-calling (2 tasks)"
 CMD="python run.py \
     --env retail \
     --agent-strategy tool-calling \
-    --model qwen3-4b \
+    --model Qwen/Qwen3-4B \
     --model-provider openai \
     --model-base-url ${AGENT_URL}/v1 \
-    --user-model qwen3-4b \
+    --user-model Qwen/Qwen3-4B \
     --user-model-provider openai \
     --user-model-base-url ${USER_URL}/v1 \
     --log-dir ${LOG_DIR} \

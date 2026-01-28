@@ -196,10 +196,10 @@ for ENV in retail airline; do
         CMD="python run.py \
             --env ${ENV} \
             --agent-strategy ${STRATEGY} \
-            --model qwen \
+            --model Qwen/Qwen3-4B \
             --model-provider openai \
             --model-base-url ${AGENT_URL}/v1 \
-            --user-model qwen2.5-32b \
+            --user-model Qwen/Qwen2.5-32B-Instruct \
             --user-model-provider openai \
             --user-model-base-url ${USER_URL}/v1 \
             --log-dir ${LOG_DIR} \
