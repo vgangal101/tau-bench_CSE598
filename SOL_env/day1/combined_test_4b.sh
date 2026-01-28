@@ -74,30 +74,35 @@ echo ""
 
 # Start User Simulator (Qwen3-4B) on port 8000
 echo "[1/2] Starting User Simulator (Qwen3-4B) on port 8000..."
+echo "   Allocating 35% GPU memory (~28GB) for user simulator..."
 vllm serve Qwen/Qwen3-4B \
     --host 0.0.0.0 \
     --port 8000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.45 \
+    --gpu-memory-utilization 0.35 \
     --max-model-len 2048 \
     --trust-remote-code \
+    --disable-log-requests \
     > logs/user_4b_${SLURM_JOB_ID}.log 2>&1 &
 
 USER_PID=$!
 echo "   User Simulator started with PID: $USER_PID"
 
-# Wait a bit before starting second server
-sleep 5
+# Wait for first server to fully load model before starting second
+echo "   Waiting for first model to fully load (60s)..."
+sleep 60
 
-# Start Agent (Qwen3-4B) on port 8001
+# Start Agent (Qwen3-4B) on port 8001 with lower allocation
 echo "[2/2] Starting Agent (Qwen3-4B) on port 8001..."
+echo "   Allocating 30% GPU memory (~24GB) for agent..."
 vllm serve Qwen/Qwen3-4B \
     --host 0.0.0.0 \
     --port 8001 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.45 \
+    --gpu-memory-utilization 0.30 \
     --max-model-len 2048 \
     --trust-remote-code \
+    --disable-log-requests \
     > logs/agent_4b_${SLURM_JOB_ID}.log 2>&1 &
 
 AGENT_PID=$!
