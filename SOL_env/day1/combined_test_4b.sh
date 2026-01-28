@@ -25,6 +25,7 @@ source activate tau-bench
 
 # Set up HuggingFace cache
 export HF_HOME=/scratch/$USER/hf_cache
+# Disable V1 engine to avoid process-based init issues with multi-server setup
 export VLLM_USE_V1=0
 mkdir -p $HF_HOME
 
@@ -48,6 +49,10 @@ echo ""
 cleanup() {
     echo ""
     echo "=== Cleaning up background processes ==="
+    if [ ! -z "$GPU_MONITOR_PID" ]; then
+        echo "Stopping GPU Monitor (PID: $GPU_MONITOR_PID)"
+        kill $GPU_MONITOR_PID 2>/dev/null || true
+    fi
     if [ ! -z "$USER_PID" ]; then
         echo "Stopping User Simulator (PID: $USER_PID)"
         kill $USER_PID 2>/dev/null || true
@@ -56,6 +61,10 @@ cleanup() {
         echo "Stopping Agent Server (PID: $AGENT_PID)"
         kill $AGENT_PID 2>/dev/null || true
     fi
+    # Final GPU snapshot
+    echo ""
+    echo "=== Final GPU Usage ==="
+    nvidia-smi
     # Wait a moment for graceful shutdown
     sleep 5
     # Force kill if still running
@@ -74,14 +83,15 @@ echo ""
 
 # Start User Simulator (Qwen3-4B) on port 8000
 echo "[1/2] Starting User Simulator (Qwen3-4B) on port 8000..."
-echo "   Allocating 35% GPU memory (~28GB) for user simulator..."
-vllm serve Qwen/Qwen3-4B \
+echo "   Allocating 40% GPU memory for user simulator..."
+VLLM_USE_V1=0 vllm serve Qwen/Qwen3-4B \
     --host 0.0.0.0 \
     --port 8000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.35 \
+    --gpu-memory-utilization 0.40 \
     --max-model-len 2048 \
     --trust-remote-code \
+    --enforce-eager \
     --disable-log-requests \
     > logs/user_4b_${SLURM_JOB_ID}.log 2>&1 &
 
@@ -89,19 +99,32 @@ USER_PID=$!
 echo "   User Simulator started with PID: $USER_PID"
 
 # Wait for first server to fully load model before starting second
-echo "   Waiting for first model to fully load (60s)..."
-sleep 60
+echo "   Waiting for first model to fully load..."
+echo "   Checking health endpoint instead of fixed sleep..."
+for i in {1..30}; do
+    if curl -s "http://localhost:8000/health" > /dev/null 2>&1; then
+        echo "   User Simulator loaded successfully after ${i}0s"
+        break
+    fi
+    sleep 10
+done
 
-# Start Agent (Qwen3-4B) on port 8001 with lower allocation
+echo ""
+echo "=== GPU Usage After User Simulator Loaded ==="
+nvidia-smi
+echo ""
+
+# Start Agent (Qwen3-4B) on port 8001 with remaining GPU memory
 echo "[2/2] Starting Agent (Qwen3-4B) on port 8001..."
-echo "   Allocating 30% GPU memory (~24GB) for agent..."
-vllm serve Qwen/Qwen3-4B \
+echo "   Allocating 35% GPU memory for agent..."
+VLLM_USE_V1=0 vllm serve Qwen/Qwen3-4B \
     --host 0.0.0.0 \
     --port 8001 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.30 \
+    --gpu-memory-utilization 0.35 \
     --max-model-len 2048 \
     --trust-remote-code \
+    --enforce-eager \
     --disable-log-requests \
     > logs/agent_4b_${SLURM_JOB_ID}.log 2>&1 &
 
@@ -166,6 +189,9 @@ fi
 echo ""
 echo "Both servers are ready!"
 echo ""
+echo "=== GPU Usage After Both Servers Loaded ==="
+nvidia-smi
+echo ""
 
 # ========================================
 # Step 3: Run Quick Test
@@ -208,6 +234,18 @@ CMD="python run.py \
 
 echo "Executing..."
 
+# Start GPU monitoring in background (every 60s)
+echo ""
+echo "=== Starting GPU monitoring (logs every 60s to logs/gpu_usage_${SLURM_JOB_ID}.log) ==="
+(while true; do
+    echo "=== GPU Usage at $(date) ===" >> logs/gpu_usage_${SLURM_JOB_ID}.log
+    nvidia-smi >> logs/gpu_usage_${SLURM_JOB_ID}.log 2>&1
+    echo "" >> logs/gpu_usage_${SLURM_JOB_ID}.log
+    sleep 60
+done) &
+GPU_MONITOR_PID=$!
+echo ""
+
 if eval $CMD; then
     echo "✓ TEST PASSED!"
     TEST_STATUS="SUCCESS"
@@ -226,6 +264,7 @@ echo ""
 echo "Server logs:"
 echo "  User: logs/user_4b_${SLURM_JOB_ID}.log"
 echo "  Agent: logs/agent_4b_${SLURM_JOB_ID}.log"
+echo "  GPU Usage: logs/gpu_usage_${SLURM_JOB_ID}.log"
 echo ""
 
 # ========================================
