@@ -7,8 +7,8 @@
 #SBATCH --gres=gpu:a100:2
 #SBATCH --mem=128G
 #SBATCH --time=10:00:00
-#SBATCH --output=logs/combined_32b_%j.out
-#SBATCH --error=logs/combined_32b_%j.err
+#SBATCH --output=logs/combined_experiment_32b_%j.out
+#SBATCH --error=logs/combined_experiment_32b_%j.err
 
 echo "========================================"
 echo "=== Day 4: Both 32B Models ==="
@@ -112,7 +112,7 @@ CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve $USER_MODEL \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
-    > logs/user_32b_${SLURM_JOB_ID}.log 2>&1 &
+    > logs/combined_experiment_32b_user_${SLURM_JOB_ID}.log 2>&1 &
 
 USER_PID=$!
 echo "   User Simulator started with PID: $USER_PID"
@@ -145,7 +145,7 @@ CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve $AGENT_MODEL \
     --disable-log-requests \
     --enable-auto-tool-choice \
     --tool-call-parser hermes \
-    > logs/agent_32b_${SLURM_JOB_ID}.log 2>&1 &
+    > logs/combined_experiment_32b_agent_${SLURM_JOB_ID}.log 2>&1 &
 
 AGENT_PID=$!
 echo "   Agent started with PID: $AGENT_PID"
@@ -182,7 +182,7 @@ done
 
 if [ $USER_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "User Simulator did not start. Check logs/user_32b_${SLURM_JOB_ID}.log"
+    echo "User Simulator did not start. Check logs/combined_experiment_32b_user_${SLURM_JOB_ID}.log"
     exit 1
 fi
 
@@ -201,7 +201,7 @@ done
 
 if [ $AGENT_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "Agent did not start. Check logs/agent_32b_${SLURM_JOB_ID}.log"
+    echo "Agent did not start. Check logs/combined_experiment_32b_agent_${SLURM_JOB_ID}.log"
     exit 1
 fi
 
@@ -229,7 +229,7 @@ echo "Working directory: $(pwd)"
 echo ""
 
 # Start GPU monitoring in background (every 60s)
-GPU_LOG="SOL_env/day4/logs/gpu_usage_${SLURM_JOB_ID}.log"
+GPU_LOG="SOL_env/day4/logs/combined_experiment_32b_gpu_usage_${SLURM_JOB_ID}.log"
 mkdir -p SOL_env/day4/logs
 echo "=== Starting GPU monitoring (logs every 60s to ${GPU_LOG}) ==="
 (while true; do
@@ -297,8 +297,8 @@ echo "=== Results Location ==="
 echo "Results saved to: SOL_env/day4/results/"
 echo ""
 echo "Server logs:"
-echo "  User: SOL_env/day4/logs/user_32b_${SLURM_JOB_ID}.log"
-echo "  Agent: SOL_env/day4/logs/agent_32b_${SLURM_JOB_ID}.log"
+echo "  User: SOL_env/day4/logs/combined_experiment_32b_user_${SLURM_JOB_ID}.log"
+echo "  Agent: SOL_env/day4/logs/combined_experiment_32b_agent_${SLURM_JOB_ID}.log"
 echo "  GPU Usage: ${GPU_LOG}"
 echo ""
 

@@ -92,7 +92,7 @@ CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve Qwen/Qwen3-32B \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
-    > logs/user_server_${SLURM_JOB_ID}.log 2>&1 &
+    > logs/combined_experiment_4b_user_server_${SLURM_JOB_ID}.log 2>&1 &
 
 USER_PID=$!
 echo "   User Simulator started with PID: $USER_PID"
@@ -111,7 +111,7 @@ CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve Qwen/Qwen3-4B \
     --disable-log-requests \
     --enable-auto-tool-choice \
     --tool-call-parser hermes \
-    > logs/agent_server_${SLURM_JOB_ID}.log 2>&1 &
+    > logs/combined_experiment_4b_agent_server_${SLURM_JOB_ID}.log 2>&1 &
 
 AGENT_PID=$!
 echo "   Agent started with PID: $AGENT_PID"
@@ -149,7 +149,7 @@ done
 
 if [ $USER_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "User Simulator did not start. Check logs/user_server_${SLURM_JOB_ID}.log"
+    echo "User Simulator did not start. Check logs/combined_experiment_4b_user_server_${SLURM_JOB_ID}.log"
     exit 1
 fi
 
@@ -168,7 +168,7 @@ done
 
 if [ $AGENT_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "Agent did not start. Check logs/agent_server_${SLURM_JOB_ID}.log"
+    echo "Agent did not start. Check logs/combined_experiment_4b_agent_server_${SLURM_JOB_ID}.log"
     exit 1
 fi
 
@@ -196,7 +196,7 @@ echo "Working directory: $(pwd)"
 echo ""
 
 # Start GPU monitoring in background (every 60s)
-GPU_LOG="SOL_env/day1/logs/gpu_usage_${SLURM_JOB_ID}.log"
+GPU_LOG="SOL_env/day1/logs/combined_experiment_4b_gpu_usage_${SLURM_JOB_ID}.log"
 mkdir -p SOL_env/day1/logs
 echo "=== Starting GPU monitoring (logs every 60s to ${GPU_LOG}) ==="
 (while true; do
@@ -264,9 +264,9 @@ echo "=== Results Location ==="
 echo "Results saved to: SOL_env/day1/results/"
 echo ""
 echo "Server logs:"
-echo "  User: logs/user_server_${SLURM_JOB_ID}.log"
-echo "  Agent: logs/agent_server_${SLURM_JOB_ID}.log"
-echo "  GPU Usage: SOL_env/day1/logs/gpu_usage_${SLURM_JOB_ID}.log"
+echo "  User: logs/combined_experiment_4b_user_server_${SLURM_JOB_ID}.log"
+echo "  Agent: logs/combined_experiment_4b_agent_server_${SLURM_JOB_ID}.log"
+echo "  GPU Usage: SOL_env/day1/logs/combined_experiment_4b_gpu_usage_${SLURM_JOB_ID}.log"
 echo ""
 
 # ========================================
