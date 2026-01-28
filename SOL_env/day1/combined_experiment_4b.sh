@@ -98,13 +98,14 @@ USER_PID=$!
 echo "   User Simulator started with PID: $USER_PID"
 
 # Start Agent (Qwen3-4B) on GPU 1, port 8001
+# Note: max-model-len reduced to 32768 due to KV cache memory constraints
 echo "[2/2] Starting Agent (Qwen3-4B) on GPU 1, port 8001..."
 CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve Qwen/Qwen3-4B \
     --host 0.0.0.0 \
     --port 8001 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.9 \
-    --max-model-len 40960 \
+    --max-model-len 32768 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
