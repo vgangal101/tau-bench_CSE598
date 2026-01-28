@@ -25,6 +25,7 @@ source activate tau-bench
 
 # Set up HuggingFace cache
 export HF_HOME=/scratch/$USER/hf_cache
+# Disable V1 engine to avoid process-based init issues with multi-server setup
 export VLLM_USE_V1=0
 mkdir -p $HF_HOME
 
@@ -48,6 +49,10 @@ echo ""
 cleanup() {
     echo ""
     echo "=== Cleaning up background processes ==="
+    if [ ! -z "$GPU_MONITOR_PID" ]; then
+        echo "Stopping GPU Monitor (PID: $GPU_MONITOR_PID)"
+        kill $GPU_MONITOR_PID 2>/dev/null || true
+    fi
     if [ ! -z "$USER_PID" ]; then
         echo "Stopping User Simulator (PID: $USER_PID)"
         kill $USER_PID 2>/dev/null || true
@@ -56,6 +61,10 @@ cleanup() {
         echo "Stopping Agent Server (PID: $AGENT_PID)"
         kill $AGENT_PID 2>/dev/null || true
     fi
+    # Final GPU snapshot
+    echo ""
+    echo "=== Final GPU Usage ==="
+    nvidia-smi
     # Wait a moment for graceful shutdown
     sleep 5
     # Force kill if still running
@@ -74,7 +83,7 @@ echo ""
 
 # Start User Simulator (Qwen2.5-32B) on GPU 0, port 8000
 echo "[1/2] Starting User Simulator (Qwen2.5-32B) on GPU 0, port 8000..."
-CUDA_VISIBLE_DEVICES=0 vllm serve Qwen/Qwen2.5-32B-Instruct \
+CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve Qwen/Qwen2.5-32B-Instruct \
     --host 0.0.0.0 \
     --port 8000 \
     --tensor-parallel-size 1 \
@@ -82,6 +91,7 @@ CUDA_VISIBLE_DEVICES=0 vllm serve Qwen/Qwen2.5-32B-Instruct \
     --max-model-len 4096 \
     --trust-remote-code \
     --enforce-eager \
+    --disable-log-requests \
     > logs/user_server_${SLURM_JOB_ID}.log 2>&1 &
 
 USER_PID=$!
@@ -89,13 +99,15 @@ echo "   User Simulator started with PID: $USER_PID"
 
 # Start Agent (Qwen3-4B) on GPU 1, port 8001
 echo "[2/2] Starting Agent (Qwen3-4B) on GPU 1, port 8001..."
-CUDA_VISIBLE_DEVICES=1 vllm serve Qwen/Qwen3-4B \
+CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve Qwen/Qwen3-4B \
     --host 0.0.0.0 \
     --port 8001 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.9 \
     --max-model-len 4096 \
     --trust-remote-code \
+    --enforce-eager \
+    --disable-log-requests \
     > logs/agent_server_${SLURM_JOB_ID}.log 2>&1 &
 
 AGENT_PID=$!
@@ -160,6 +172,9 @@ fi
 echo ""
 echo "Both servers are ready!"
 echo ""
+echo "=== GPU Usage After Both Servers Loaded ==="
+nvidia-smi
+echo ""
 
 # ========================================
 # Step 3: Run Experiments
@@ -175,6 +190,19 @@ echo ""
 # Navigate to repository root
 cd ../../
 echo "Working directory: $(pwd)"
+echo ""
+
+# Start GPU monitoring in background (every 60s)
+GPU_LOG="SOL_env/day1/logs/gpu_usage_${SLURM_JOB_ID}.log"
+mkdir -p SOL_env/day1/logs
+echo "=== Starting GPU monitoring (logs every 60s to ${GPU_LOG}) ==="
+(while true; do
+    echo "=== GPU Usage at $(date) ===" >> ${GPU_LOG}
+    nvidia-smi >> ${GPU_LOG} 2>&1
+    echo "" >> ${GPU_LOG}
+    sleep 60
+done) &
+GPU_MONITOR_PID=$!
 echo ""
 
 # Loop through environments and strategies
@@ -238,6 +266,7 @@ echo ""
 echo "Server logs:"
 echo "  User: logs/user_server_${SLURM_JOB_ID}.log"
 echo "  Agent: logs/agent_server_${SLURM_JOB_ID}.log"
+echo "  GPU Usage: SOL_env/day1/logs/gpu_usage_${SLURM_JOB_ID}.log"
 echo ""
 
 # ========================================

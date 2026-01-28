@@ -235,12 +235,14 @@ CMD="python run.py \
 echo "Executing..."
 
 # Start GPU monitoring in background (every 60s)
+GPU_LOG="SOL_env/day1/logs/gpu_usage_${SLURM_JOB_ID}.log"
+mkdir -p SOL_env/day1/logs
 echo ""
-echo "=== Starting GPU monitoring (logs every 60s to logs/gpu_usage_${SLURM_JOB_ID}.log) ==="
+echo "=== Starting GPU monitoring (logs every 60s to ${GPU_LOG}) ==="
 (while true; do
-    echo "=== GPU Usage at $(date) ===" >> logs/gpu_usage_${SLURM_JOB_ID}.log
-    nvidia-smi >> logs/gpu_usage_${SLURM_JOB_ID}.log 2>&1
-    echo "" >> logs/gpu_usage_${SLURM_JOB_ID}.log
+    echo "=== GPU Usage at $(date) ===" >> ${GPU_LOG}
+    nvidia-smi >> ${GPU_LOG} 2>&1
+    echo "" >> ${GPU_LOG}
     sleep 60
 done) &
 GPU_MONITOR_PID=$!
@@ -264,7 +266,7 @@ echo ""
 echo "Server logs:"
 echo "  User: logs/user_4b_${SLURM_JOB_ID}.log"
 echo "  Agent: logs/agent_4b_${SLURM_JOB_ID}.log"
-echo "  GPU Usage: logs/gpu_usage_${SLURM_JOB_ID}.log"
+echo "  GPU Usage: SOL_env/day1/logs/gpu_usage_${SLURM_JOB_ID}.log"
 echo ""
 
 # ========================================
