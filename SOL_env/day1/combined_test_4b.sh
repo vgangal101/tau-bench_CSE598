@@ -28,6 +28,14 @@ export HF_HOME=/scratch/$USER/hf_cache
 export VLLM_USE_V1=0
 mkdir -p $HF_HOME
 
+# Install tau-bench package with dependencies (ensures litellm is available)
+echo "=== Installing tau-bench dependencies ==="
+cd ../../
+pip install -q -e .
+cd SOL_env/day1
+echo "Dependencies installed"
+echo ""
+
 # Set API key for experiments
 export OPENAI_API_KEY="dummy"
 
