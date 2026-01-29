@@ -97,7 +97,7 @@ echo ""
 
 # NOTE on memory: Qwen3-32B needs ~64GB in fp16.
 # A100 80GB at 90% = 72GB available. That leaves ~8GB for KV cache.
-# max-model-len 40960 needs ~4GB KV cache (GQA keeps it small).
+# max-model-len 32768 needs ~4GB KV cache (GQA keeps it small).
 # If you hit OOM, reduce max-model-len or request 4 GPUs
 # and use tensor-parallel-size 2 per model.
 
