@@ -1,0 +1,42 @@
+  The Good News
+
+  1. 120 Gaudi GPUs available now, 1200 coming - significant capacity
+  2. "API access" via voyager.rc.asu.edu suggests they may provide an inference endpoint rather than raw
+  compute access
+  3. If it's an OpenAI-compatible API, your scripts could work with minimal changes
+
+  Potential Integration Scenarios
+
+  Scenario A: API Endpoint Access (easiest)
+  If ASU provides a hosted vLLM/TGI endpoint, you'd just change the base URL:
+
+  # Current (self-hosted on Sol):
+  --model-base-url http://localhost:8001/v1
+
+  # Potential Gaudi API:
+  --model-base-url https://voyager.rc.asu.edu/v1  # or similar
+
+  Your run.py already supports --model-base-url and --user-model-base-url, so this would be seamless.
+
+  Scenario B: Compute Access (more work)
+  If you get raw Gaudi node access, you'd need to:
+  - Use Gaudi containers
+  - Install vllm-gaudi plugin
+  - Adapt job scripts (scheduler TBD)
+
+  Questions to Ask Gil Speyer on Tuesday
+
+  1. What type of access? API endpoint vs raw compute allocation?
+  2. If API: What models are pre-deployed? Can you request specific models (Qwen3)?
+  3. If compute: What scheduler (SLURM, Kubernetes)? What containers available?
+  4. Quotas/limits on concurrent requests or GPU-hours?
+  5. Authentication mechanism for the API?
+
+  Action Items
+
+  Once you get the documentation from your professor, I can help you:
+  1. Adapt your experiment scripts for the Gaudi API
+  2. Create new job scripts if needed
+  3. Test the connection and validate model compatibility
+
+  This could actually simplify your workflow if it's API-based - no more managing vLLM servers yourself!
