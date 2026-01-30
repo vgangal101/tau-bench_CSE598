@@ -11,3 +11,5 @@ __pycache__/
 .env
 .claude
 CLAUDE.md
+AgenticAI/
+SOL_env/conversation_log.md
