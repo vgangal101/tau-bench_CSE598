@@ -9,5 +9,3 @@ __pycache__/
 
 # some files to ignore for the team
 .env
-.claude
-CLAUDE.md

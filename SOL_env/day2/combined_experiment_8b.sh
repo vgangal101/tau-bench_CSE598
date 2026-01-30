@@ -133,13 +133,15 @@ nvidia-smi
 echo ""
 
 # Start Agent on GPU 1, port 8001
+# NOTE: Qwen3-8B only needs ~16GB, leaving ~56GB for KV cache on A100 80GB
+# This allows much longer context than 32B model
 echo "[2/2] Starting Agent ($AGENT_MODEL) on GPU 1, port 8001..."
 CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve $AGENT_MODEL \
     --host 0.0.0.0 \
     --port 8001 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.90 \
-    --max-model-len 36000 \
+    --max-model-len 65536 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
