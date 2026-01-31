@@ -72,8 +72,10 @@ echo ""
 # ========================================
 # Model Configuration
 # ========================================
-USER_MODEL="zankich/Qwen3-32B-INT8"
-AGENT_MODEL="Qwen/Qwen3-8B"
+# Both models use the FP16 32B model
+# Each node has 1 A100 80GB which can fit the 32B FP16 model (~64GB)
+USER_MODEL="Qwen/Qwen3-32B"
+AGENT_MODEL="Qwen/Qwen3-32B"
 
 echo "=== Configuration ==="
 echo "User Model: $USER_MODEL (on $USER_NODE)"
@@ -104,6 +106,7 @@ trap cleanup EXIT INT TERM
 # Step 1: Start User Simulator on Node 1
 # ========================================
 echo "=== Step 1: Starting User Simulator on $USER_NODE ==="
+$QWEN3_MAX_TOK_LEN=32768
 
 # Use srun to execute on specific node
 srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
@@ -123,8 +126,7 @@ srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
         --port $USER_PORT \
         --tensor-parallel-size 1 \
         --gpu-memory-utilization 0.90 \
-        --max-model-len 50000 \
-        --quantization gptq \
+        --max-model-len $QWEN3_MAX_TOK_LEN \
         --trust-remote-code \
         --enforce-eager \
         --disable-log-requests \
@@ -158,7 +160,7 @@ srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
         --port $AGENT_PORT \
         --tensor-parallel-size 1 \
         --gpu-memory-utilization 0.90 \
-        --max-model-len 50000 \
+        --max-model-len $QWEN3_MAX_TOK_LEN \
         --trust-remote-code \
         --enforce-eager \
         --disable-log-requests \
