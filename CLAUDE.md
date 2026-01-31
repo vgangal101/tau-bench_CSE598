@@ -269,7 +269,7 @@ All experiment scripts include the following robustness features:
 
 4. **Enhanced error handling**: If vLLM fails to start, the last 50 lines of the server log are printed to help diagnose issues.
 
-5. **SLURM log consolidation**: SLURM `.out` and `.err` files are automatically moved to `$SCRIPT_DIR/logs/` on job completion.
+5. **Direct log output**: All stdout/stderr is redirected directly to `$SCRIPT_DIR/logs/` at job start using `exec` redirection.
 
 6. **Diagnostic output**: Scripts print `SCRIPT_DIR`, `REPO_ROOT`, and `SUBMIT_DIR` at startup for debugging.
 
@@ -328,7 +328,7 @@ sbatch multi_node_experiment.sh
 
 #### Multi-Node Log Files
 
-All logs are saved to `SOL_env/logs/`:
+All logs are written **directly** to `SOL_env/logs/` from job start:
 
 ```
 SOL_env/logs/

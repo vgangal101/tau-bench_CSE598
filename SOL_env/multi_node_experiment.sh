@@ -8,9 +8,7 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=96G
 #SBATCH --time=2:00:00
-# Note: %x=job name, %j=job id. These go to submit directory, moved to logs/ on completion
-#SBATCH --output=%x_%j.out
-#SBATCH --error=%x_%j.err
+# Note: Output/error are redirected to logs/ after path setup (see exec below)
 
 # ========================================
 # Multi-Node Experiment: User on Node 1, Agent on Node 2
@@ -40,7 +38,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Create logs directory
 mkdir -p "$SCRIPT_DIR/logs"
-SUBMIT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
+
+# Redirect all stdout/stderr directly to logs directory
+exec > "$SCRIPT_DIR/logs/tau-multi-node_${SLURM_JOB_ID}.out" 2> "$SCRIPT_DIR/logs/tau-multi-node_${SLURM_JOB_ID}.err"
 
 echo "========================================"
 echo "=== Multi-Node Experiment ==="
@@ -50,8 +50,9 @@ echo "Job ID: $SLURM_JOB_ID"
 echo "SLURM_SUBMIT_DIR: $SLURM_SUBMIT_DIR"
 echo "Script directory: $SCRIPT_DIR"
 echo "Repository root: $REPO_ROOT"
-echo "Submit directory: $SUBMIT_DIR"
 echo "Logs directory: $SCRIPT_DIR/logs"
+echo "Output file: $SCRIPT_DIR/logs/tau-multi-node_${SLURM_JOB_ID}.out"
+echo "Error file: $SCRIPT_DIR/logs/tau-multi-node_${SLURM_JOB_ID}.err"
 echo ""
 
 # Verify the paths are valid
@@ -120,10 +121,6 @@ cleanup() {
     srun --nodes=1 --ntasks=1 -w $AGENT_NODE pkill -f "vllm serve" 2>/dev/null || true
 
     echo "Cleanup complete"
-
-    # Move SLURM logs
-    mv "$SUBMIT_DIR/tau-multi-node_${SLURM_JOB_ID}.out" "$SCRIPT_DIR/logs/" 2>/dev/null || true
-    mv "$SUBMIT_DIR/tau-multi-node_${SLURM_JOB_ID}.err" "$SCRIPT_DIR/logs/" 2>/dev/null || true
 }
 
 trap cleanup EXIT INT TERM
@@ -139,6 +136,7 @@ USER_LOG="$SCRIPT_DIR/logs/multi_node_user_${SLURM_JOB_ID}.log"
 AGENT_LOG="$SCRIPT_DIR/logs/multi_node_agent_${SLURM_JOB_ID}.log"
 
 # Use srun to execute on specific node
+# Run vLLM in foreground inside srun, but background the entire srun command
 srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
     # Load modules on the remote node
     module load mamba/latest
@@ -152,9 +150,12 @@ srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
     # Ensure log directory exists on this compute node
     mkdir -p $SCRIPT_DIR/logs
 
-    echo 'Starting User Simulator on \$(hostname)...'
-    echo 'Log file: $USER_LOG'
+    echo 'Starting User Simulator on '\$(hostname)'...' >> $USER_LOG 2>&1
+    echo 'Log file: $USER_LOG' >> $USER_LOG 2>&1
+    echo 'Python: '\$(which python) >> $USER_LOG 2>&1
+    echo 'vLLM: '\$(which vllm 2>/dev/null || echo 'not found') >> $USER_LOG 2>&1
 
+    # Run vLLM in foreground (srun itself is backgrounded)
     vllm serve $USER_MODEL \
         --host 0.0.0.0 \
         --port $USER_PORT \
@@ -164,19 +165,22 @@ srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
         --trust-remote-code \
         --enforce-eager \
         --disable-log-requests \
-        > $USER_LOG 2>&1 &
-
-    echo 'User Simulator started in background'
+        >> $USER_LOG 2>&1
 " &
 
 USER_SRUN_PID=$!
 echo "User srun PID: $USER_SRUN_PID"
+echo "User log: $USER_LOG"
+
+# Small delay to let first srun establish
+sleep 2
 
 # ========================================
 # Step 2: Start Agent on Node 2
 # ========================================
 echo "=== Step 2: Starting Agent on $AGENT_NODE ==="
 
+# Run vLLM in foreground inside srun, but background the entire srun command
 srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
     # Load modules on the remote node
     module load mamba/latest
@@ -190,9 +194,12 @@ srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
     # Ensure log directory exists on this compute node
     mkdir -p $SCRIPT_DIR/logs
 
-    echo 'Starting Agent on \$(hostname)...'
-    echo 'Log file: $AGENT_LOG'
+    echo 'Starting Agent on '\$(hostname)'...' >> $AGENT_LOG 2>&1
+    echo 'Log file: $AGENT_LOG' >> $AGENT_LOG 2>&1
+    echo 'Python: '\$(which python) >> $AGENT_LOG 2>&1
+    echo 'vLLM: '\$(which vllm 2>/dev/null || echo 'not found') >> $AGENT_LOG 2>&1
 
+    # Run vLLM in foreground (srun itself is backgrounded)
     vllm serve $AGENT_MODEL \
         --host 0.0.0.0 \
         --port $AGENT_PORT \
@@ -204,13 +211,12 @@ srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
         --disable-log-requests \
         --enable-auto-tool-choice \
         --tool-call-parser hermes \
-        > $AGENT_LOG 2>&1 &
-
-    echo 'Agent started in background'
+        >> $AGENT_LOG 2>&1
 " &
 
 AGENT_SRUN_PID=$!
 echo "Agent srun PID: $AGENT_SRUN_PID"
+echo "Agent log: $AGENT_LOG"
 echo ""
 
 # ========================================

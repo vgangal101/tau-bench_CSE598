@@ -36,16 +36,16 @@ sbatch multi_node_experiment.sh
 # Check job status
 squeue -u $USER
 
-# Watch SLURM output in real-time
-tail -f tau-multi-node_<job_id>.out
+# Watch output in real-time (logs are in SOL_env/logs/)
+tail -f SOL_env/logs/tau-multi-node_<job_id>.out
 
 # Check for errors
-cat tau-multi-node_<job_id>.err
+cat SOL_env/logs/tau-multi-node_<job_id>.err
 ```
 
 ## Log Files
 
-All logs are saved to `SOL_env/logs/` after job completion:
+All logs are written **directly** to `SOL_env/logs/` from the start (not moved after completion):
 
 | File | Description |
 |------|-------------|
@@ -84,9 +84,13 @@ SOL_env/results_multi_node/
 
 ## Troubleshooting
 
-### "Permission denied" when creating logs
-**Cause**: `SCRIPT_DIR` resolved incorrectly in SLURM environment.
-**Fix**: Submit from repo root or SOL_env directory (not from an unrelated directory).
+### No output files / "Permission denied"
+**Cause**: `SCRIPT_DIR` resolved incorrectly if submitted from an unrelated directory.
+**Fix**: Submit from repo root or SOL_env directory:
+```bash
+cd /scratch/$USER/tau-bench-project/tau-bench
+sbatch SOL_env/multi_node_experiment.sh
+```
 
 ### vLLM server fails to start
 Check the vLLM logs:
