@@ -222,17 +222,55 @@ Uses pre-quantized GPTQ INT8 models from HuggingFace for reduced memory and long
 
 ### Running on SOL Cluster
 
+Scripts are **directory-independent** - you can submit from any location:
+
 ```bash
-# Submit a job
-cd SOL_env/day2
-sbatch combined_experiment_8b.sh
+# Submit from anywhere (recommended)
+sbatch /scratch/$USER/tau-bench-project/tau-bench/SOL_env/day2/int8_experiment_8b.sh
+
+# Or from the script's directory
+cd /scratch/$USER/tau-bench-project/tau-bench/SOL_env/day2
+sbatch int8_experiment_8b.sh
 
 # Monitor job
 squeue -u $USER
-tail -f logs/combined_experiment_8b_<job_id>.out
 
-# Check for errors
-cat logs/combined_experiment_8b_<job_id>.err
+# Check logs (all logs are in the script's directory)
+tail -f SOL_env/day2/logs/int8_experiment_8b_<job_id>.out
+cat SOL_env/day2/logs/int8_experiment_8b_<job_id>.err
+```
+
+### Script Robustness Features
+
+All experiment scripts include the following robustness features:
+
+1. **Directory-independent execution**: Scripts auto-detect their location using `SCRIPT_DIR` and `REPO_ROOT` variables, so they work regardless of which directory you submit from.
+
+2. **Automatic path resolution**:
+   ```bash
+   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+   ```
+
+3. **All paths are absolute**: Log files, results, and dependencies use `$SCRIPT_DIR` for consistent file locations.
+
+4. **Enhanced error handling**: If vLLM fails to start, the last 50 lines of the server log are printed to help diagnose issues.
+
+5. **SLURM log consolidation**: SLURM `.out` and `.err` files are automatically moved to `$SCRIPT_DIR/logs/` on job completion.
+
+6. **Diagnostic output**: Scripts print `SCRIPT_DIR`, `REPO_ROOT`, and `SUBMIT_DIR` at startup for debugging.
+
+### Log File Locations
+
+After a job completes, all logs are consolidated in the script's `logs/` directory:
+
+```
+SOL_env/day2/logs/
+├── tau-int8-8b_<job_id>.out          # SLURM stdout
+├── tau-int8-8b_<job_id>.err          # SLURM stderr
+├── int8_experiment_8b_user_<job_id>.log    # vLLM user server log
+├── int8_experiment_8b_agent_<job_id>.log   # vLLM agent server log
+└── int8_experiment_8b_gpu_usage_<job_id>.log  # GPU monitoring log
 ```
 
 ### vLLM Quantization Flags
