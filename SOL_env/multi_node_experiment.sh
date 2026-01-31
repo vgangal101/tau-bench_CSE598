@@ -15,8 +15,8 @@
 # Multi-Node Experiment: User on Node 1, Agent on Node 2
 # ========================================
 # This script requests 2 nodes, each with 1 A100 GPU:
-#   - Node 1: User Simulator (Qwen3-32B-INT8) on port 8000
-#   - Node 2: Agent Model (Qwen3-8B) on port 8001
+#   - Node 1: User Simulator (Qwen/Qwen3-32B) on port 8000
+#   - Node 2: Agent Model (Qwen/Qwen3-32B) on port 8000
 #
 # Communication happens over the cluster network (not localhost)
 # ========================================
