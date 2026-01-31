@@ -106,7 +106,7 @@ trap cleanup EXIT INT TERM
 # Step 1: Start User Simulator on Node 1
 # ========================================
 echo "=== Step 1: Starting User Simulator on $USER_NODE ==="
-$QWEN3_MAX_TOK_LEN=32768
+QWEN3_MAX_TOK_LEN=32768
 
 # Use srun to execute on specific node
 srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
