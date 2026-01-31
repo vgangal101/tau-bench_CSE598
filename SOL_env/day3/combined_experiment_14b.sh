@@ -7,8 +7,16 @@
 #SBATCH --gres=gpu:a100:2
 #SBATCH --mem=128G
 #SBATCH --time=2:00:00
-#SBATCH --output=logs/combined_experiment_14b_%j.out
-#SBATCH --error=logs/combined_experiment_14b_%j.err
+#SBATCH --output=tau-day3-14b_%j.out
+#SBATCH --error=tau-day3-14b_%j.err
+
+# Get the directory where this script is located (robust to submission directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Create logs directory
+mkdir -p "$SCRIPT_DIR/logs"
+SUBMIT_DIR="$(pwd)"
 
 echo "========================================"
 echo "=== Day 3: User 32B + Agent 14B ==="
@@ -16,6 +24,9 @@ echo "========================================"
 echo "Started at: $(date)"
 echo "Node: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID"
+echo "Script directory: $SCRIPT_DIR"
+echo "Repository root: $REPO_ROOT"
+echo "Submit directory: $SUBMIT_DIR"
 echo ""
 
 # Load modules
@@ -31,14 +42,10 @@ mkdir -p $HF_HOME
 
 # Install tau-bench package with dependencies
 echo "=== Installing tau-bench dependencies ==="
-cd ../../
+cd "$REPO_ROOT"
 pip install -q -e .
-cd SOL_env/day3
 echo "Dependencies installed"
 echo ""
-
-# Create logs directory
-mkdir -p logs
 
 # Set API key for experiments
 export OPENAI_API_KEY="dummy"
@@ -84,6 +91,11 @@ cleanup() {
     # Force kill if still running
     pkill -f "vllm serve" 2>/dev/null || true
     echo "Cleanup complete"
+
+    # Move SLURM output files to logs directory
+    echo "Moving SLURM logs to $SCRIPT_DIR/logs/"
+    mv "$SUBMIT_DIR/tau-day3-14b_${SLURM_JOB_ID}.out" "$SCRIPT_DIR/logs/" 2>/dev/null || true
+    mv "$SUBMIT_DIR/tau-day3-14b_${SLURM_JOB_ID}.err" "$SCRIPT_DIR/logs/" 2>/dev/null || true
 }
 
 # Set trap to cleanup on exit
@@ -112,7 +124,7 @@ CUDA_VISIBLE_DEVICES=0 VLLM_USE_V1=0 vllm serve $USER_MODEL \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
-    > logs/combined_experiment_14b_user_${SLURM_JOB_ID}.log 2>&1 &
+    > "$SCRIPT_DIR/logs/combined_experiment_14b_user_${SLURM_JOB_ID}.log" 2>&1 &
 
 USER_PID=$!
 echo "   User Simulator started with PID: $USER_PID"
@@ -133,19 +145,21 @@ nvidia-smi
 echo ""
 
 # Start Agent on GPU 1, port 8001
+# NOTE: Qwen3-14B needs ~28GB, leaving ~44GB for KV cache on A100 80GB
+# This allows longer context than the 32B user model
 echo "[2/2] Starting Agent ($AGENT_MODEL) on GPU 1, port 8001..."
 CUDA_VISIBLE_DEVICES=1 VLLM_USE_V1=0 vllm serve $AGENT_MODEL \
     --host 0.0.0.0 \
     --port 8001 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.90 \
-    --max-model-len 36000 \
+    --max-model-len 65536 \
     --trust-remote-code \
     --enforce-eager \
     --disable-log-requests \
     --enable-auto-tool-choice \
     --tool-call-parser hermes \
-    > logs/combined_experiment_14b_agent_${SLURM_JOB_ID}.log 2>&1 &
+    > "$SCRIPT_DIR/logs/combined_experiment_14b_agent_${SLURM_JOB_ID}.log" 2>&1 &
 
 AGENT_PID=$!
 echo "   Agent started with PID: $AGENT_PID"
@@ -182,7 +196,8 @@ done
 
 if [ $USER_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "User Simulator did not start. Check logs/combined_experiment_14b_user_${SLURM_JOB_ID}.log"
+    echo "User Simulator did not start. Check $SCRIPT_DIR/logs/combined_experiment_14b_user_${SLURM_JOB_ID}.log"
+    cat "$SCRIPT_DIR/logs/combined_experiment_14b_user_${SLURM_JOB_ID}.log" 2>/dev/null | tail -50
     exit 1
 fi
 
@@ -201,7 +216,8 @@ done
 
 if [ $AGENT_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "Agent did not start. Check logs/combined_experiment_14b_agent_${SLURM_JOB_ID}.log"
+    echo "Agent did not start. Check $SCRIPT_DIR/logs/combined_experiment_14b_agent_${SLURM_JOB_ID}.log"
+    cat "$SCRIPT_DIR/logs/combined_experiment_14b_agent_${SLURM_JOB_ID}.log" 2>/dev/null | tail -50
     exit 1
 fi
 
@@ -224,13 +240,12 @@ echo "Envs: retail, airline"
 echo ""
 
 # Navigate to repository root
-cd ../../
+cd "$REPO_ROOT"
 echo "Working directory: $(pwd)"
 echo ""
 
 # Start GPU monitoring in background (every 60s)
-GPU_LOG="SOL_env/day3/logs/combined_experiment_14b_gpu_usage_${SLURM_JOB_ID}.log"
-mkdir -p SOL_env/day3/logs
+GPU_LOG="$SCRIPT_DIR/logs/combined_experiment_14b_gpu_usage_${SLURM_JOB_ID}.log"
 echo "=== Starting GPU monitoring (logs every 60s to ${GPU_LOG}) ==="
 (while true; do
     echo "=== GPU Usage at $(date) ===" >> ${GPU_LOG}
@@ -253,8 +268,8 @@ for ENV in retail airline; do
         echo "  > Strategy: $STRATEGY"
 
         # Create log directory
-        LOG_DIR="SOL_env/day3/results/${ENV}/${STRATEGY}"
-        mkdir -p $LOG_DIR
+        LOG_DIR="$SCRIPT_DIR/results/${ENV}/${STRATEGY}"
+        mkdir -p "$LOG_DIR"
 
         # Run experiment
         CMD="python run.py \
@@ -294,11 +309,11 @@ echo ""
 # Step 4: Display Results Info
 # ========================================
 echo "=== Results Location ==="
-echo "Results saved to: SOL_env/day3/results/"
+echo "Results saved to: $SCRIPT_DIR/results/"
 echo ""
 echo "Server logs:"
-echo "  User: SOL_env/day3/logs/combined_experiment_14b_user_${SLURM_JOB_ID}.log"
-echo "  Agent: SOL_env/day3/logs/combined_experiment_14b_agent_${SLURM_JOB_ID}.log"
+echo "  User: $SCRIPT_DIR/logs/combined_experiment_14b_user_${SLURM_JOB_ID}.log"
+echo "  Agent: $SCRIPT_DIR/logs/combined_experiment_14b_agent_${SLURM_JOB_ID}.log"
 echo "  GPU Usage: ${GPU_LOG}"
 echo ""
 
