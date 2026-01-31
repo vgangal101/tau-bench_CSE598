@@ -8,7 +8,8 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=96G
 #SBATCH --time=2:00:00
-# Note: Output/error are redirected to logs/ after path setup (see exec below)
+#SBATCH --output=tau-multi-node_%j.out
+#SBATCH --error=tau-multi-node_%j.err
 
 # ========================================
 # Multi-Node Experiment: User on Node 1, Agent on Node 2
@@ -38,9 +39,6 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Create logs directory
 mkdir -p "$SCRIPT_DIR/logs"
-
-# Redirect all stdout/stderr directly to logs directory
-exec > "$SCRIPT_DIR/logs/tau-multi-node_${SLURM_JOB_ID}.out" 2> "$SCRIPT_DIR/logs/tau-multi-node_${SLURM_JOB_ID}.err"
 
 echo "========================================"
 echo "=== Multi-Node Experiment ==="
@@ -121,6 +119,12 @@ cleanup() {
     srun --nodes=1 --ntasks=1 -w $AGENT_NODE pkill -f "vllm serve" 2>/dev/null || true
 
     echo "Cleanup complete"
+
+    # Move SLURM output files to logs directory
+    if [ -n "$SLURM_SUBMIT_DIR" ] && [ -n "$SLURM_JOB_ID" ]; then
+        mv "$SLURM_SUBMIT_DIR/tau-multi-node_${SLURM_JOB_ID}.out" "$SCRIPT_DIR/logs/" 2>/dev/null || true
+        mv "$SLURM_SUBMIT_DIR/tau-multi-node_${SLURM_JOB_ID}.err" "$SCRIPT_DIR/logs/" 2>/dev/null || true
+    fi
 }
 
 trap cleanup EXIT INT TERM
