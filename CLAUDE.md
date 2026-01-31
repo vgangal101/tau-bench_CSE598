@@ -179,6 +179,10 @@ Scripts for running experiments on ASU SOL cluster with local vLLM inference.
 
 ```
 SOL_env/
+├── multi_node_experiment.sh           # Multi-node: User + Agent on separate nodes
+├── README_multi_node.md               # Multi-node experiment documentation
+├── logs/                              # All log files (created automatically)
+├── results_multi_node/                # Multi-node experiment results
 ├── day1/
 │   ├── combined_experiment_4b.sh      # FP16: User 32B + Agent 4B
 │   └── int8_experiment_4b.sh          # INT8: User 32B + Agent 4B
@@ -246,10 +250,19 @@ All experiment scripts include the following robustness features:
 
 1. **Directory-independent execution**: Scripts auto-detect their location using `SCRIPT_DIR` and `REPO_ROOT` variables, so they work regardless of which directory you submit from.
 
-2. **Automatic path resolution**:
+2. **Automatic path resolution** (SLURM-aware):
    ```bash
-   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+   # Use SLURM_SUBMIT_DIR when available (reliable in SLURM)
+   # Fall back to BASH_SOURCE for local testing
+   if [ -n "$SLURM_SUBMIT_DIR" ]; then
+       if [ -d "$SLURM_SUBMIT_DIR/SOL_env" ]; then
+           SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env"
+       else
+           SCRIPT_DIR="$SLURM_SUBMIT_DIR"
+       fi
+   else
+       SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+   fi
    ```
 
 3. **All paths are absolute**: Log files, results, and dependencies use `$SCRIPT_DIR` for consistent file locations.
@@ -293,3 +306,50 @@ vllm serve zankich/Qwen3-32B-INT8 --quantization gptq --max-model-len 50000
 
 - FP16 results: `SOL_env/dayX/results/{env}/{strategy}/`
 - INT8 results: `SOL_env/dayX/results_int8/{env}/{strategy}/`
+
+### Multi-Node Experiment
+
+The `multi_node_experiment.sh` script runs experiments across **2 separate nodes**, each with its own vLLM server:
+
+- **Node 1**: User Simulator (Qwen/Qwen3-32B) on port 8000
+- **Node 2**: Agent Model (Qwen/Qwen3-32B) on port 8000
+
+#### Running Multi-Node Experiment
+
+```bash
+# From repo root (recommended)
+cd /scratch/$USER/tau-bench-project/tau-bench
+sbatch SOL_env/multi_node_experiment.sh
+
+# Or from SOL_env directory
+cd /scratch/$USER/tau-bench-project/tau-bench/SOL_env
+sbatch multi_node_experiment.sh
+```
+
+#### Multi-Node Log Files
+
+All logs are saved to `SOL_env/logs/`:
+
+```
+SOL_env/logs/
+├── tau-multi-node_<job_id>.out      # SLURM stdout
+├── tau-multi-node_<job_id>.err      # SLURM stderr
+├── multi_node_user_<job_id>.log     # vLLM user server log
+└── multi_node_agent_<job_id>.log    # vLLM agent server log
+```
+
+#### Multi-Node Results
+
+Results saved to `SOL_env/results_multi_node/{env}/{strategy}/`
+
+#### Multi-Node Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| Nodes | 2 |
+| GPUs per node | 1x A100 80GB |
+| User Model | Qwen/Qwen3-32B |
+| Agent Model | Qwen/Qwen3-32B |
+| Max context | 32768 tokens |
+
+See `SOL_env/README_multi_node.md` for detailed documentation.

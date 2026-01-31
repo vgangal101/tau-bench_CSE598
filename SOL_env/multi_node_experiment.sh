@@ -8,8 +8,9 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=96G
 #SBATCH --time=2:00:00
-#SBATCH --output=tau-multi-node_%j.out
-#SBATCH --error=tau-multi-node_%j.err
+# Note: %x=job name, %j=job id. These go to submit directory, moved to logs/ on completion
+#SBATCH --output=%x_%j.out
+#SBATCH --error=%x_%j.err
 
 # ========================================
 # Multi-Node Experiment: User on Node 1, Agent on Node 2
@@ -22,21 +23,46 @@
 # ========================================
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SLURM_SUBMIT_DIR is reliable in SLURM environments (directory where sbatch was run)
+# Fall back to BASH_SOURCE for local testing
+if [ -n "$SLURM_SUBMIT_DIR" ]; then
+    # When submitted via sbatch, use the submit directory to find the script
+    # Assuming sbatch is run from repo root or SOL_env directory
+    if [ -d "$SLURM_SUBMIT_DIR/SOL_env" ]; then
+        SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env"
+    else
+        SCRIPT_DIR="$SLURM_SUBMIT_DIR"
+    fi
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Create logs directory
 mkdir -p "$SCRIPT_DIR/logs"
-SUBMIT_DIR="$(pwd)"
+SUBMIT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
 
 echo "========================================"
 echo "=== Multi-Node Experiment ==="
 echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
+echo "SLURM_SUBMIT_DIR: $SLURM_SUBMIT_DIR"
 echo "Script directory: $SCRIPT_DIR"
 echo "Repository root: $REPO_ROOT"
+echo "Submit directory: $SUBMIT_DIR"
+echo "Logs directory: $SCRIPT_DIR/logs"
 echo ""
+
+# Verify the paths are valid
+if [ ! -d "$SCRIPT_DIR" ]; then
+    echo "ERROR: Script directory does not exist: $SCRIPT_DIR"
+    exit 1
+fi
+if [ ! -d "$REPO_ROOT" ]; then
+    echo "ERROR: Repository root does not exist: $REPO_ROOT"
+    exit 1
+fi
 
 # ========================================
 # Get Node Hostnames
@@ -108,6 +134,10 @@ trap cleanup EXIT INT TERM
 echo "=== Step 1: Starting User Simulator on $USER_NODE ==="
 QWEN3_MAX_TOK_LEN=32768
 
+# Define log file paths (these will be expanded here and passed to remote nodes)
+USER_LOG="$SCRIPT_DIR/logs/multi_node_user_${SLURM_JOB_ID}.log"
+AGENT_LOG="$SCRIPT_DIR/logs/multi_node_agent_${SLURM_JOB_ID}.log"
+
 # Use srun to execute on specific node
 srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
     # Load modules on the remote node
@@ -119,7 +149,11 @@ srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
     export VLLM_USE_V1=0
     mkdir -p \$HF_HOME
 
+    # Ensure log directory exists on this compute node
+    mkdir -p $SCRIPT_DIR/logs
+
     echo 'Starting User Simulator on \$(hostname)...'
+    echo 'Log file: $USER_LOG'
 
     vllm serve $USER_MODEL \
         --host 0.0.0.0 \
@@ -130,7 +164,7 @@ srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
         --trust-remote-code \
         --enforce-eager \
         --disable-log-requests \
-        > $SCRIPT_DIR/logs/multi_node_user_${SLURM_JOB_ID}.log 2>&1 &
+        > $USER_LOG 2>&1 &
 
     echo 'User Simulator started in background'
 " &
@@ -153,7 +187,11 @@ srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
     export VLLM_USE_V1=0
     mkdir -p \$HF_HOME
 
+    # Ensure log directory exists on this compute node
+    mkdir -p $SCRIPT_DIR/logs
+
     echo 'Starting Agent on \$(hostname)...'
+    echo 'Log file: $AGENT_LOG'
 
     vllm serve $AGENT_MODEL \
         --host 0.0.0.0 \
@@ -166,7 +204,7 @@ srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
         --disable-log-requests \
         --enable-auto-tool-choice \
         --tool-call-parser hermes \
-        > $SCRIPT_DIR/logs/multi_node_agent_${SLURM_JOB_ID}.log 2>&1 &
+        > $AGENT_LOG 2>&1 &
 
     echo 'Agent started in background'
 " &
@@ -202,8 +240,8 @@ done
 
 if [ $USER_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "User Simulator did not start. Check $SCRIPT_DIR/logs/multi_node_user_${SLURM_JOB_ID}.log"
-    cat "$SCRIPT_DIR/logs/multi_node_user_${SLURM_JOB_ID}.log" 2>/dev/null | tail -50
+    echo "User Simulator did not start. Check $USER_LOG"
+    cat "$USER_LOG" 2>/dev/null | tail -50
     exit 1
 fi
 
@@ -222,8 +260,8 @@ done
 
 if [ $AGENT_READY -eq 0 ]; then
     echo " FAILED!"
-    echo "Agent did not start. Check $SCRIPT_DIR/logs/multi_node_agent_${SLURM_JOB_ID}.log"
-    cat "$SCRIPT_DIR/logs/multi_node_agent_${SLURM_JOB_ID}.log" 2>/dev/null | tail -50
+    echo "Agent did not start. Check $AGENT_LOG"
+    cat "$AGENT_LOG" 2>/dev/null | tail -50
     exit 1
 fi
 
