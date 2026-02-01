@@ -1,19 +1,19 @@
 #!/bin/bash
-#SBATCH --job-name=tau-4b-exp
+#SBATCH --job-name=tau-8b-exp
 #SBATCH --partition=public
 #SBATCH --nodes=2
 #SBATCH --ntasks=2
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=10
+#SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=64G
+#SBATCH --mem=96G
 #SBATCH --time=6:00:00
-#SBATCH --output=tau-4b-exp_%j.out
-#SBATCH --error=tau-4b-exp_%j.err
+#SBATCH --output=tau-8b-exp_%j.out
+#SBATCH --error=tau-8b-exp_%j.err
 #SBATCH --account=class_cse59827694spring2026
 
 # ========================================
-# 4B Experiment: User (32B) on Node 1, Agent (4B) on Node 2
+# 8B Experiment: User (32B) on Node 1, Agent (8B) on Node 2
 # ========================================
 # Configuration:
 #   - Time: 6 hours
@@ -30,7 +30,7 @@
 # Get the directory where this script is located
 if [ -n "$SLURM_SUBMIT_DIR" ]; then
     if [ -d "$SLURM_SUBMIT_DIR/SOL_env" ]; then
-        SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env/4b_run"
+        SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env/8b_run"
     else
         SCRIPT_DIR="$SLURM_SUBMIT_DIR"
     fi
@@ -43,7 +43,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 mkdir -p "$SCRIPT_DIR/logs"
 
 echo "========================================"
-echo "=== 4B Experiment ==="
+echo "=== 8B Experiment ==="
 echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -95,7 +95,7 @@ echo ""
 # Model Configuration
 # ========================================
 USER_MODEL="Qwen/Qwen3-32B"
-AGENT_MODEL="Qwen/Qwen3-4B"
+AGENT_MODEL="Qwen/Qwen3-8B"
 
 echo "=== Configuration ==="
 echo "User Model: $USER_MODEL (on $USER_NODE)"
@@ -120,8 +120,8 @@ cleanup() {
 
     # Move SLURM output files to logs directory
     if [ -n "$SLURM_SUBMIT_DIR" ] && [ -n "$SLURM_JOB_ID" ]; then
-        mv "$SLURM_SUBMIT_DIR/tau-4b-exp_${SLURM_JOB_ID}.out" "$SCRIPT_DIR/logs/" 2>/dev/null || true
-        mv "$SLURM_SUBMIT_DIR/tau-4b-exp_${SLURM_JOB_ID}.err" "$SCRIPT_DIR/logs/" 2>/dev/null || true
+        mv "$SLURM_SUBMIT_DIR/tau-8b-exp_${SLURM_JOB_ID}.out" "$SCRIPT_DIR/logs/" 2>/dev/null || true
+        mv "$SLURM_SUBMIT_DIR/tau-8b-exp_${SLURM_JOB_ID}.err" "$SCRIPT_DIR/logs/" 2>/dev/null || true
     fi
 }
 
@@ -134,8 +134,8 @@ echo "=== Step 1: Starting User Simulator (32B) on $USER_NODE ==="
 QWEN3_MAX_TOK_LEN=32768
 
 # Define log file paths
-USER_LOG="$SCRIPT_DIR/logs/4b_user_${SLURM_JOB_ID}.log"
-AGENT_LOG="$SCRIPT_DIR/logs/4b_agent_${SLURM_JOB_ID}.log"
+USER_LOG="$SCRIPT_DIR/logs/8b_user_${SLURM_JOB_ID}.log"
+AGENT_LOG="$SCRIPT_DIR/logs/8b_agent_${SLURM_JOB_ID}.log"
 
 srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
     # Load modules on the remote node
@@ -175,9 +175,9 @@ echo "User log: $USER_LOG"
 sleep 2
 
 # ========================================
-# Step 2: Start Agent on Node 2 (4B)
+# Step 2: Start Agent on Node 2 (8B)
 # ========================================
-echo "=== Step 2: Starting Agent (4B) on $AGENT_NODE ==="
+echo "=== Step 2: Starting Agent (8B) on $AGENT_NODE ==="
 
 srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
     # Load modules on the remote node
@@ -192,17 +192,16 @@ srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
     # Ensure log directory exists on this compute node
     mkdir -p $SCRIPT_DIR/logs
 
-    echo 'Starting Agent (4B) on '\$(hostname)'...' >> $AGENT_LOG 2>&1
+    echo 'Starting Agent (8B) on '\$(hostname)'...' >> $AGENT_LOG 2>&1
     echo 'Log file: $AGENT_LOG' >> $AGENT_LOG 2>&1
     echo 'Python: '\$(which python) >> $AGENT_LOG 2>&1
 
     # Run vLLM in foreground (srun itself is backgrounded)
-    # 4B model is smaller, can use more memory utilization
     vllm serve $AGENT_MODEL \
         --host 0.0.0.0 \
         --port $AGENT_PORT \
         --tensor-parallel-size 1 \
-        --gpu-memory-utilization 0.95 \
+        --gpu-memory-utilization 0.90 \
         --max-model-len $QWEN3_MAX_TOK_LEN \
         --trust-remote-code \
         --enforce-eager \
@@ -344,6 +343,6 @@ echo "Results saved to: $SCRIPT_DIR/results/"
 echo ""
 
 echo "========================================"
-echo "=== 4B Experiment Complete ==="
+echo "=== 8B Experiment Complete ==="
 echo "========================================"
 echo "Finished at: $(date)"
