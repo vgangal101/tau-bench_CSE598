@@ -27,9 +27,14 @@
 #   - Max Concurrency: 20
 # ========================================
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Hardcoded paths - works regardless of submission directory
+# Update these paths if you move the repository
+SCRIPT_DIR="/scratch/$USER/tau-bench_CSE598/SOL_env/14b_run"
+REPO_ROOT="/scratch/$USER/tau-bench_CSE598"
+
+# Alternative: uncomment below if using home directory
+# SCRIPT_DIR="$HOME/tau-bench_CSE598/SOL_env/14b_run"
+# REPO_ROOT="$HOME/tau-bench_CSE598"
 
 # Create logs directory
 mkdir -p "$SCRIPT_DIR/logs"
