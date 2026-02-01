@@ -16,9 +16,11 @@
 # 4B Experiment: User (32B) on Node 1, Agent (4B) on Node 2
 # ========================================
 # Configuration:
-#   - Time: 8 hours
-#   - GPUs: 1 per node
+#   - Time: 6 hours
+#   - GPUs: 1 per node (A100)
 #   - Nodes: 2
+#   - CPUs: 10 per task
+#   - Memory: 64G per node
 #   - Environments: retail, airline
 #   - Trials: 5
 #   - Tasks: all
