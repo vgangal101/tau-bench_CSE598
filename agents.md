@@ -191,19 +191,13 @@ cat SOL_env/4b_run/logs/tau-4b-exp_<job_id>.out
 
 ## Key Observations
 
-1. **Directory Independence**: All scripts use `SCRIPT_DIR` variable for path resolution, allowing submission from any directory
+1. **Directory Independence**: All scripts use `SCRIPT_DIR` and `REPO_ROOT` variables for path resolution, allowing submission from any directory
 
-2. **SLURM-Aware**: Scripts check `SLURM_SUBMIT_DIR` for proper path detection in cluster environment:
+2. **BASH_SOURCE Path Resolution**: Scripts use `BASH_SOURCE` for reliable path detection regardless of where you submit from:
    ```bash
-   if [ -n "$SLURM_SUBMIT_DIR" ]; then
-       if [ -d "$SLURM_SUBMIT_DIR/SOL_env" ]; then
-           SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env/{X}b_run"
-       else
-           SCRIPT_DIR="$SLURM_SUBMIT_DIR"
-       fi
-   else
-       SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   fi
+   # BASH_SOURCE always gives the actual script location
+   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
    ```
 
 3. **Cross-Node Communication**: User and Agent models run on separate nodes, communicate via `http://${NODE}:8000/v1`

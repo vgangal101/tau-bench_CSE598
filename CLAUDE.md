@@ -250,19 +250,12 @@ All experiment scripts include the following robustness features:
 
 1. **Directory-independent execution**: Scripts auto-detect their location using `SCRIPT_DIR` and `REPO_ROOT` variables, so they work regardless of which directory you submit from.
 
-2. **Automatic path resolution** (SLURM-aware):
+2. **Automatic path resolution using BASH_SOURCE**:
    ```bash
-   # Use SLURM_SUBMIT_DIR when available (reliable in SLURM)
-   # Fall back to BASH_SOURCE for local testing
-   if [ -n "$SLURM_SUBMIT_DIR" ]; then
-       if [ -d "$SLURM_SUBMIT_DIR/SOL_env" ]; then
-           SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env"
-       else
-           SCRIPT_DIR="$SLURM_SUBMIT_DIR"
-       fi
-   else
-       SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   fi
+   # BASH_SOURCE always gives the actual script location
+   # Works regardless of where sbatch is called from
+   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+   REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"  # or ../.. for scripts in subdirectories
    ```
 
 3. **All paths are absolute**: Log files, results, and dependencies use `$SCRIPT_DIR` for consistent file locations.
