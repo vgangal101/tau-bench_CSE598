@@ -28,15 +28,7 @@
 # ========================================
 
 # Get the directory where this script is located
-if [ -n "$SLURM_SUBMIT_DIR" ]; then
-    if [ -d "$SLURM_SUBMIT_DIR/SOL_env" ]; then
-        SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env/32b_run"
-    else
-        SCRIPT_DIR="$SLURM_SUBMIT_DIR"
-    fi
-else
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Create logs directory

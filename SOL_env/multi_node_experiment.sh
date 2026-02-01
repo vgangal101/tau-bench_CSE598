@@ -22,19 +22,7 @@
 # ========================================
 
 # Get the directory where this script is located
-# SLURM_SUBMIT_DIR is reliable in SLURM environments (directory where sbatch was run)
-# Fall back to BASH_SOURCE for local testing
-if [ -n "$SLURM_SUBMIT_DIR" ]; then
-    # When submitted via sbatch, use the submit directory to find the script
-    # Assuming sbatch is run from repo root or SOL_env directory
-    if [ -d "$SLURM_SUBMIT_DIR/SOL_env" ]; then
-        SCRIPT_DIR="$SLURM_SUBMIT_DIR/SOL_env"
-    else
-        SCRIPT_DIR="$SLURM_SUBMIT_DIR"
-    fi
-else
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Create logs directory
