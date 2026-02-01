@@ -102,7 +102,7 @@ echo ""
 # Both models use the FP16 32B model
 # Each node has 1 A100 80GB which can fit the 32B FP16 model (~64GB)
 USER_MODEL="Qwen/Qwen3-32B"
-AGENT_MODEL="Qwen/Qwen3-32B"
+AGENT_MODEL="Qwen/Qwen3-4B"
 
 echo "=== Configuration ==="
 echo "User Model: $USER_MODEL (on $USER_NODE)"
@@ -321,9 +321,9 @@ for ENV in retail airline; do
             --user-model-provider openai \
             --user-model-base-url ${USER_URL}/v1 \
             --log-dir ${LOG_DIR} \
-            --max-concurrency 5 \
-            --num-trials 1 \
-            --end-index 3 \
+            --max-concurrency 20 \
+            --num-trials 5 \
+            --end-index -1 \
             --shuffle 0"
 
         echo "    Executing..."
