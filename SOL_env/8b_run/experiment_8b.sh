@@ -19,8 +19,8 @@
 #   - Time: 6 hours
 #   - GPUs: 1 per node (A100)
 #   - Nodes: 2
-#   - CPUs: 10 per task
-#   - Memory: 64G per node
+#   - CPUs: 16 per task
+#   - Memory: 96G per node
 #   - Environments: retail, airline
 #   - Trials: 5
 #   - Tasks: all
