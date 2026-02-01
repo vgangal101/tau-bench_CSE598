@@ -4,9 +4,9 @@
 #SBATCH --nodes=2
 #SBATCH --ntasks=2
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=10
+#SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=64G
+#SBATCH --mem=96G
 #SBATCH --time=6:00:00
 #SBATCH --output=tau-4b-exp_%j.out
 #SBATCH --error=tau-4b-exp_%j.err
@@ -19,8 +19,8 @@
 #   - Time: 6 hours
 #   - GPUs: 1 per node (A100)
 #   - Nodes: 2
-#   - CPUs: 10 per task
-#   - Memory: 64G per node
+#   - CPUs: 16 per task
+#   - Memory: 96G per node
 #   - Environments: retail, airline
 #   - Trials: 5
 #   - Tasks: all
