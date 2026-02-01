@@ -10,3 +10,4 @@ __pycache__/
 # some files to ignore for the team
 .env
 AgenticAI/
+conversation_log.md
