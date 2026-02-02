@@ -175,26 +175,35 @@ Historical trajectories available in `historical_trajectories/` directory.
 
 Scripts for running experiments on ASU SOL cluster with local vLLM inference.
 
+### First-Time Environment Setup (Required for New Users)
+
+Each user must create the `tau-bench` conda environment **once** before running any jobs. Run these commands on a Sol login node:
+
+```bash
+module load mamba/latest
+module load cuda-12.1.1-gcc-12.1.0
+mamba create -n tau-bench -c conda-forge python=3.11 -y
+source activate tau-bench
+cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
+pip install -e .
+pip install vllm
+```
+
+After this one-time setup, all experiment jobs will work automatically.
+
 ### Directory Structure
 
 ```
 SOL_env/
 ├── multi_node_experiment.sh           # Multi-node: User + Agent on separate nodes
-├── README_multi_node.md               # Multi-node experiment documentation
-├── logs/                              # All log files (created automatically)
-├── results_multi_node/                # Multi-node experiment results
-├── day1/
-│   ├── combined_experiment_4b.sh      # FP16: User 32B + Agent 4B
-│   └── int8_experiment_4b.sh          # INT8: User 32B + Agent 4B
-├── day2/
-│   ├── combined_experiment_8b.sh      # FP16: User 32B + Agent 8B
-│   └── int8_experiment_8b.sh          # INT8: User 32B + Agent 8B
-├── day3/
-│   ├── combined_experiment_14b.sh     # FP16: User 32B + Agent 14B
-│   └── int8_experiment_14b.sh         # INT8: User 32B + Agent 14B (both INT8)
-├── day4/
-│   ├── combined_experiment_32b.sh     # FP16: User 32B + Agent 32B
-│   └── int8_experiment_32b.sh         # INT8: User 32B + Agent 32B (both INT8)
+├── 4b_run/
+│   └── experiment_4b.sh               # User 32B + Agent 4B
+├── 8b_run/
+│   └── experiment_8b.sh               # User 32B + Agent 8B
+├── 14b_run/
+│   └── experiment_14b.sh              # User 32B + Agent 14B
+├── 32b_run/
+│   └── experiment_32b.sh              # User 32B + Agent 32B
 ```
 
 ### FP16 Scripts (Default Precision)
