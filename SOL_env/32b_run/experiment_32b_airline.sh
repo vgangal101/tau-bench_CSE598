@@ -291,36 +291,36 @@ TOTAL_EXPERIMENTS=0
 SUCCESSFUL_EXPERIMENTS=0
 
 # Environment: airline only
-for ENV in airline; do
-    echo ""
-    echo ">>> Running Environment: $ENV"
+ENV=airline
 
-    for STRATEGY in tool-calling act react; do
-        echo "  > Strategy: $STRATEGY"
+echo ""
+echo ">>> Running Environment: $ENV"
 
-        LOG_DIR="$SCRIPT_DIR/results/${ENV}/${STRATEGY}"
-        mkdir -p "$LOG_DIR"
+for STRATEGY in tool-calling act react; do
+    echo "  > Strategy: $STRATEGY"
 
-        CMD="python run.py \
-            --env ${ENV} \
-            --agent-strategy ${STRATEGY} \
-            --model ${AGENT_MODEL} \
-            --model-provider openai \
-            --model-base-url ${AGENT_URL}/v1 \
-            --user-model ${USER_MODEL} \
-            --user-model-provider openai \
-            --user-model-base-url ${USER_URL}/v1 \
-            --log-dir ${LOG_DIR} \
-            --max-concurrency 10 \
-            --num-trials 5"
+    LOG_DIR="$SCRIPT_DIR/results/${ENV}/${STRATEGY}"
+    mkdir -p "$LOG_DIR"
 
-        echo "    Executing with max-concurrency=10, num-trials=5, all tasks..."
-        TOTAL_EXPERIMENTS=$((TOTAL_EXPERIMENTS + 1))
+    CMD="python run.py \
+        --env ${ENV} \
+        --agent-strategy ${STRATEGY} \
+        --model ${AGENT_MODEL} \
+        --model-provider openai \
+        --model-base-url ${AGENT_URL}/v1 \
+        --user-model ${USER_MODEL} \
+        --user-model-provider openai \
+        --user-model-base-url ${USER_URL}/v1 \
+        --log-dir ${LOG_DIR} \
+        --max-concurrency 10 \
+        --num-trials 5"
 
-        eval $CMD
-        echo "    Completed $STRATEGY for $ENV"
-        SUCCESSFUL_EXPERIMENTS=$((SUCCESSFUL_EXPERIMENTS + 1))
-    done
+    echo "    Executing with max-concurrency=10, num-trials=5, all tasks..."
+    TOTAL_EXPERIMENTS=$((TOTAL_EXPERIMENTS + 1))
+
+    eval $CMD
+    echo "    Completed $STRATEGY for $ENV"
+    SUCCESSFUL_EXPERIMENTS=$((SUCCESSFUL_EXPERIMENTS + 1))
 done
 
 echo ""

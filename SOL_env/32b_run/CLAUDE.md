@@ -7,6 +7,7 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #41 | 4:01 PM | 🔄 | Simplified Loop Structure in Airline Experiment Script | ~305 |
 | #38 | 3:55 PM | 🔵 | Verified Separate SLURM Scripts for Retail and Airline Environments | ~312 |
 | #34 | 3:54 PM | 🟣 | Created SLURM Script for 32B Retail Environment Benchmark | ~513 |
 </claude-mem-context>
