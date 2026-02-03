@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=tau-32b-airline
+#SBATCH --job-name=tau-32b-airline-tool-calling
 #SBATCH --partition=public
 #SBATCH --nodes=2
 #SBATCH --ntasks=2
@@ -8,12 +8,12 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=96G
 #SBATCH --time=6:00:00
-#SBATCH --output=tau-32b-airline_%j.out
-#SBATCH --error=tau-32b-airline_%j.err
+#SBATCH --output=tau-32b-airline-tool-calling_%j.out
+#SBATCH --error=tau-32b-airline-tool-calling_%j.err
 #SBATCH --account=class_cse59827694spring2026
 
 # ========================================
-# 32B Airline Experiment: User (32B) on Node 1, Agent (32B) on Node 2
+# 32B Airline Tool-Calling Experiment: User (32B) on Node 1, Agent (32B) on Node 2
 # ========================================
 # Configuration:
 #   - Time: 6 hours
@@ -22,6 +22,7 @@
 #   - CPUs: 16 per task
 #   - Memory: 96G per node
 #   - Environment: airline
+#   - Strategy: tool-calling
 #   - Trials: 5
 #   - Tasks: all
 #   - Max Concurrency: 10
@@ -35,7 +36,7 @@ REPO_ROOT="/scratch/$USER/tau-bench-project/tau-bench_CSE598"
 mkdir -p "$SCRIPT_DIR/logs"
 
 echo "========================================"
-echo "=== 32B Airline Experiment ==="
+echo "=== 32B Airline Tool-Calling Experiment ==="
 echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -95,6 +96,7 @@ echo "Agent Model: $AGENT_MODEL (on $AGENT_NODE)"
 echo "Max Concurrency: 10"
 echo "Trials: 5"
 echo "Environment: airline"
+echo "Strategy: tool-calling"
 echo ""
 
 # ========================================
@@ -112,8 +114,8 @@ cleanup() {
 
     # Move SLURM output files to logs directory
     if [ -n "$SLURM_SUBMIT_DIR" ] && [ -n "$SLURM_JOB_ID" ]; then
-        mv "$SLURM_SUBMIT_DIR/tau-32b-airline_${SLURM_JOB_ID}.out" "$SCRIPT_DIR/logs/" 2>/dev/null || true
-        mv "$SLURM_SUBMIT_DIR/tau-32b-airline_${SLURM_JOB_ID}.err" "$SCRIPT_DIR/logs/" 2>/dev/null || true
+        mv "$SLURM_SUBMIT_DIR/tau-32b-airline-tool-calling_${SLURM_JOB_ID}.out" "$SCRIPT_DIR/logs/" 2>/dev/null || true
+        mv "$SLURM_SUBMIT_DIR/tau-32b-airline-tool-calling_${SLURM_JOB_ID}.err" "$SCRIPT_DIR/logs/" 2>/dev/null || true
     fi
 }
 
@@ -265,9 +267,9 @@ echo "Both servers are ready!"
 echo ""
 
 # ========================================
-# Step 4: Install Dependencies and Run Experiments
+# Step 4: Install Dependencies and Run Experiment
 # ========================================
-echo "=== Step 4: Running Experiments ==="
+echo "=== Step 4: Running Experiment ==="
 echo ""
 
 # Load modules on the current node for running experiments
@@ -286,55 +288,35 @@ echo "User URL: $USER_URL"
 echo "Agent URL: $AGENT_URL"
 echo ""
 
-# Run experiments
-TOTAL_EXPERIMENTS=0
-SUCCESSFUL_EXPERIMENTS=0
-
-# Environment: airline only
+# Run experiment
 ENV=airline
+STRATEGY=tool-calling
 
-echo ""
-echo ">>> Running Environment: $ENV"
+echo ">>> Running Environment: $ENV, Strategy: $STRATEGY"
 
-for STRATEGY in tool-calling act react; do
-    echo "  > Strategy: $STRATEGY"
+LOG_DIR="$SCRIPT_DIR/results/${ENV}/${STRATEGY}"
+mkdir -p "$LOG_DIR"
 
-    LOG_DIR="$SCRIPT_DIR/results/${ENV}/${STRATEGY}"
-    mkdir -p "$LOG_DIR"
+CMD="python run.py \
+    --env ${ENV} \
+    --agent-strategy ${STRATEGY} \
+    --model ${AGENT_MODEL} \
+    --model-provider openai \
+    --model-base-url ${AGENT_URL}/v1 \
+    --user-model ${USER_MODEL} \
+    --user-model-provider openai \
+    --user-model-base-url ${USER_URL}/v1 \
+    --log-dir ${LOG_DIR} \
+    --max-concurrency 10 \
+    --num-trials 5"
 
-    CMD="python run.py \
-        --env ${ENV} \
-        --agent-strategy ${STRATEGY} \
-        --model ${AGENT_MODEL} \
-        --model-provider openai \
-        --model-base-url ${AGENT_URL}/v1 \
-        --user-model ${USER_MODEL} \
-        --user-model-provider openai \
-        --user-model-base-url ${USER_URL}/v1 \
-        --log-dir ${LOG_DIR} \
-        --max-concurrency 10 \
-        --num-trials 5"
+echo "Executing with max-concurrency=10, num-trials=5, all tasks..."
 
-    echo "    Executing with max-concurrency=10, num-trials=5, all tasks..."
-    TOTAL_EXPERIMENTS=$((TOTAL_EXPERIMENTS + 1))
-
-    eval $CMD
-    echo "    Completed $STRATEGY for $ENV"
-    SUCCESSFUL_EXPERIMENTS=$((SUCCESSFUL_EXPERIMENTS + 1))
-done
+eval $CMD
 
 echo ""
 echo "========================================"
-echo "=== Experiments Summary ==="
+echo "=== 32B Airline Tool-Calling Experiment Complete ==="
 echo "========================================"
-echo "Total experiments: $TOTAL_EXPERIMENTS"
-echo "Successful: $SUCCESSFUL_EXPERIMENTS"
-echo "Failed: $((TOTAL_EXPERIMENTS - SUCCESSFUL_EXPERIMENTS))"
-echo ""
-echo "Results saved to: $SCRIPT_DIR/results/"
-echo ""
-
-echo "========================================"
-echo "=== 32B Airline Experiment Complete ==="
-echo "========================================"
+echo "Results saved to: $LOG_DIR"
 echo "Finished at: $(date)"
