@@ -10,6 +10,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --output=8b-retail-act-tau-gaudi_%j.out
 #SBATCH --error=8b-retail-act-tau-gaudi_%j.err
+#SBATCH --exclusive
 
 # ========================================
 # Gaudi 8B Retail Act Experiment
@@ -58,7 +59,8 @@ mkdir -p "$WORK_DIR/logs"
 
 cleanup() {
     echo "=== Cleaning up ==="
-    pkill -f "vllm serve" 2>/dev/null || true
+    [ -n "$USER_PID" ] && kill $USER_PID 2>/dev/null
+    [ -n "$AGENT_PID" ] && kill $AGENT_PID 2>/dev/null
     fuser -k $USER_PORT/tcp 2>/dev/null || true
     fuser -k $AGENT_PORT/tcp 2>/dev/null || true
 }
@@ -132,7 +134,7 @@ echo "Both servers ready!"
 # ========================================
 module load mamba/latest
 source activate tau-bench 2>/dev/null || { mamba create -n tau-bench -c conda-forge python=3.11 -y; source activate tau-bench; cd "$REPO_ROOT"; pip install -e .; }
-cd "$REPO_ROOT"; pip install -q -e . 2>/dev/null || pip install -e .
+cd "$REPO_ROOT"; pip uninstall tau_bench -y 2>/dev/null || true; pip install -e .
 
 export OPENAI_API_KEY="dummy"
 LOG_DIR="$SCRIPT_DIR/results_gaudi/${ENV}/${STRATEGY}"

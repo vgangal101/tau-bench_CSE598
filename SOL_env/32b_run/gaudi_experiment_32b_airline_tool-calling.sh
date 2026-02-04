@@ -10,6 +10,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --output=32b-airline-tc-tau-gaudi_%j.out
 #SBATCH --error=32b-airline-tc-tau-gaudi_%j.err
+#SBATCH --exclusive
 
 set -e
 SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/32b_run"
@@ -43,7 +44,7 @@ VLLM_CD="$GAUDI_BASE/vllm-fork/.cd"
 WORK_DIR="/scratch/$USER/gaudi_tau_bench_${SLURM_JOB_ID}"
 mkdir -p "$WORK_DIR/logs"
 
-cleanup() { pkill -f "vllm serve" 2>/dev/null || true; fuser -k $PORT/tcp 2>/dev/null || true; }
+cleanup() { [ -n "$SERVER_PID" ] && kill $SERVER_PID 2>/dev/null; fuser -k $PORT/tcp 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
 SERVER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_32b_airline_tc_${SLURM_JOB_ID}.log"
@@ -82,7 +83,7 @@ if [ $SERVER_READY -eq 0 ]; then echo " TIMEOUT!"; tail -100 "$SERVER_LOG"; exit
 
 module load mamba/latest
 source activate tau-bench 2>/dev/null || { mamba create -n tau-bench -c conda-forge python=3.11 -y; source activate tau-bench; cd "$REPO_ROOT"; pip install -e .; }
-cd "$REPO_ROOT"; pip install -q -e . 2>/dev/null || pip install -e .
+cd "$REPO_ROOT"; pip uninstall tau_bench -y 2>/dev/null || true; pip install -e .
 
 export OPENAI_API_KEY="dummy"
 LOG_DIR="$SCRIPT_DIR/results_gaudi/${ENV}/${STRATEGY}"

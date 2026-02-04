@@ -10,6 +10,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --output=32b-retail-act-tau-gaudi_%j.out
 #SBATCH --error=32b-retail-act-tau-gaudi_%j.err
+#SBATCH --exclusive
 
 # ========================================
 # Gaudi 32B Retail Act Experiment (Single Node)
@@ -142,7 +143,7 @@ echo ""
 cleanup() {
     echo ""
     echo "=== Cleaning up ==="
-    pkill -f "vllm serve" 2>/dev/null || true
+    [ -n "$SERVER_PID" ] && kill $SERVER_PID 2>/dev/null
     fuser -k $PORT/tcp 2>/dev/null || true
     echo "Cleanup complete"
 }
@@ -280,7 +281,7 @@ source activate tau-bench 2>/dev/null || {
 }
 
 cd "$REPO_ROOT"
-pip install -q -e . 2>/dev/null || pip install -e .
+pip uninstall tau_bench -y 2>/dev/null || true; pip install -e .
 echo ""
 
 # ========================================
