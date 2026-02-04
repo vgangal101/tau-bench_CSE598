@@ -79,8 +79,8 @@ echo ""
 # Using Qwen3-32B - fits on single 96GB HPU with limited context
 MODEL="Qwen/Qwen3-32B"
 
-# Port for vLLM server
-PORT=8000
+# Port for vLLM server (32B uses 8001, 4B uses 8000 to avoid conflicts)
+PORT=8001
 
 # Context length - 32B model (~64GB) leaves ~32GB for KV cache
 # Conservative setting to avoid OOM

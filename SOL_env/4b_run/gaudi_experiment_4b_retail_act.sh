@@ -78,7 +78,7 @@ echo ""
 # Using Qwen3-4B for both user and agent (single server)
 MODEL="Qwen/Qwen3-4B"
 
-# Port for vLLM server
+# Port for vLLM server (4B uses 8000, 32B uses 8001 to avoid conflicts)
 PORT=8000
 
 # Context length settings - tau-bench needs ~5000+ tokens
