@@ -355,3 +355,87 @@ Results saved to `SOL_env/results_multi_node/{env}/{strategy}/`
 | Max context | 32768 tokens |
 
 See `SOL_env/README_multi_node.md` for detailed documentation.
+
+### Intel Gaudi Experiments
+
+Scripts for running experiments on Intel Gaudi2 accelerators (HPU) on SOL cluster.
+
+Based on **ASU RC Workshop: "Introducing the Gaudi2 and Demystifying AI Processors"**
+
+#### Hardware Available on SOL
+
+| Component | Details |
+|-----------|---------|
+| Nodes | 10 (gaudi001-gaudi010), 200+ coming |
+| Accelerator | HL-225 (Gaudi2) |
+| HPUs per node | 8 |
+| Memory per HPU | 96GB HBM |
+| CPUs per node | 152 |
+| Driver | SynapseAI 1.23.0 |
+
+#### Quick Start Options
+
+**Option 1: Use SOL's Pre-hosted API (Easiest)**
+```bash
+# Get API key from https://voyager.rc.asu.edu/ → LLM Access tab
+export SOL_API_KEY="your-api-key"
+bash SOL_env/gaudi_api_experiment.sh
+```
+
+Available models: `qwen3-30b-a3b-instruct-2507` (131K context), `qwen3-235b-a22b-instruct-2507` (262K context)
+
+**Option 2: Run Local vLLM on Gaudi Node**
+```bash
+sbatch SOL_env/gaudi_experiment.sh
+```
+
+**Option 3: Interactive Shell**
+```bash
+interactive -p gaudi -c 30 --mem=30G -G 3 -t 0-6
+```
+
+#### Pre-configured Resources on SOL
+
+| Resource | Location/Name |
+|----------|---------------|
+| Jupyter kernels | `gaudi-pytorch`, `gaudi-pytorch-vllm` |
+| Containers/guides | `/data/sse/gaudi/`, `/data/sse/gaudi/guides/` |
+| Example notebooks | `/data/sse/gaudi/notebooks/` |
+| OpenAI-compatible API | `https://openai.rc.asu.edu/v1` |
+
+#### SLURM Configuration for Gaudi
+
+```bash
+#SBATCH --partition=gaudi
+#SBATCH --qos=public
+#SBATCH --gres=gpu:hl225:1
+#SBATCH --cpus-per-task=30
+#SBATCH --mem=96G
+```
+
+#### Gaudi Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `SOL_env/gaudi_api_experiment.sh` | Use SOL's hosted API (no local setup) |
+| `SOL_env/gaudi_experiment.sh` | Run local vLLM on Gaudi node |
+| `SOL_env/gaudi_setup_check.sh` | Diagnostic script |
+| `SOL_env/README_gaudi.md` | Full documentation |
+
+#### Key Differences from A100 Scripts
+
+| Setting | A100 (CUDA) | Gaudi (HPU) |
+|---------|-------------|-------------|
+| Device flag | (auto-detect) | `--device hpu` |
+| Block size | 16 (default) | `--block-size 128` |
+| Eager mode | `--enforce-eager` | Not used (HPU Graphs preferred) |
+| Partition | `general` or `public` | `gaudi` |
+| GPU resource | `gpu:a100:1` | `gpu:hl225:1` |
+
+#### Checking Gaudi Status
+
+```bash
+hl-smi   # equivalent to nvidia-smi
+```
+
+See `SOL_env/README_gaudi.md` for detailed setup instructions.

@@ -1,42 +1,22 @@
 #!/bin/bash
 #SBATCH --job-name=tau-gaudi
 #SBATCH --partition=gaudi
-#SBATCH --qos=class_gaudi
+#SBATCH --qos=public
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:hl225:1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=30
 #SBATCH --mem=96G
 #SBATCH --time=04:00:00
 #SBATCH --output=tau-gaudi_%j.out
 #SBATCH --error=tau-gaudi_%j.err
 
 # ========================================
-# Intel Gaudi (HPU) Experiment Script
+# Intel Gaudi Experiment Script for SOL
 # ========================================
-# This script runs tau-bench experiments on Intel Gaudi accelerators
-# using the vllm-gaudi plugin.
+# This script runs tau-bench experiments on Intel Gaudi2 accelerators
+# using the pre-configured gaudi-pytorch-vllm environment on SOL.
 #
-# PREREQUISITES:
-# 1. Install vllm-gaudi plugin (see setup instructions below)
-# 2. Habana SynapseAI SDK must be installed on the cluster
-# 3. Python environment with vLLM built for Gaudi
-#
-# SETUP INSTRUCTIONS (one-time):
-#   # Clone and install vllm-gaudi
-#   git clone https://github.com/vllm-project/vllm-gaudi
-#   cd vllm-gaudi
-#   export VLLM_COMMIT_HASH=$(git show "origin/vllm/last-good-commit-for-vllm-gaudi:VLLM_STABLE_COMMIT" 2>/dev/null)
-#   cd ..
-#
-#   # Install vLLM for empty platform
-#   git clone https://github.com/vllm-project/vllm
-#   cd vllm && git checkout $VLLM_COMMIT_HASH
-#   pip install -r <(sed '/^torch/d' requirements/build.txt)
-#   VLLM_TARGET_DEVICE=empty pip install --no-build-isolation -e .
-#   cd ..
-#
-#   # Install Gaudi plugin
-#   cd vllm-gaudi && pip install -e . && cd ..
+# Based on ASU RC Workshop "Introducing the Gaudi2"
 # ========================================
 
 # Get the directory where this script is located
@@ -56,71 +36,75 @@ echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $(hostname)"
-echo "SLURM_SUBMIT_DIR: $SLURM_SUBMIT_DIR"
 echo "Script directory: $SCRIPT_DIR"
 echo "Repository root: $REPO_ROOT"
 echo ""
 
 # ========================================
-# Environment Setup for Gaudi on SOL
+# Check Gaudi Hardware
 # ========================================
-echo "=== Setting up Gaudi Environment ==="
-
-# Load mamba for conda
-module load mamba/latest
-
-# Activate the tau-gaudi conda environment
-source activate tau-gaudi || {
-    echo "ERROR: tau-gaudi environment not found!"
-    echo "Run this first: bash SOL_env/gaudi_env_setup.sh"
-    exit 1
-}
-
-echo "Conda environment: $CONDA_DEFAULT_ENV"
-echo "Python: $(which python)"
+echo "=== Checking Gaudi Hardware ==="
+hl-smi
+echo ""
 
 # ========================================
-# Habana Environment Variables for SOL
+# Environment Setup - Use SOL's Pre-configured Environment
 # ========================================
-# Habana software is installed at /opt/habanalabs on SOL Gaudi nodes
+echo "=== Setting up Environment ==="
 
-# Add Habana binaries to PATH
-export PATH="/opt/habanalabs/bin:$PATH"
+# Check for guides and containers
+echo "Available Gaudi resources on SOL:"
+ls -la /data/sse/gaudi/ 2>/dev/null || echo "Note: /data/sse/gaudi not accessible"
+echo ""
 
-# Add Habana libraries to LD_LIBRARY_PATH
-export LD_LIBRARY_PATH="/opt/habanalabs/lib:$LD_LIBRARY_PATH"
+# Source the gaudi-pytorch-vllm environment
+# This is pre-configured by SOL admins with all Habana packages
+if [ -f "/data/sse/gaudi/activate_vllm.sh" ]; then
+    echo "Sourcing /data/sse/gaudi/activate_vllm.sh"
+    source /data/sse/gaudi/activate_vllm.sh
+elif [ -f "/data/sse/gaudi/env/vllm/bin/activate" ]; then
+    echo "Activating vLLM virtual environment"
+    source /data/sse/gaudi/env/vllm/bin/activate
+else
+    # Fall back to using Apptainer/Singularity container
+    echo "Looking for Apptainer container..."
+    CONTAINER=$(find /data/sse/gaudi -name "*.sif" 2>/dev/null | head -1)
+    if [ -n "$CONTAINER" ]; then
+        echo "Found container: $CONTAINER"
+        USE_CONTAINER=true
+    else
+        echo "WARNING: No pre-configured environment found"
+        echo "Check /data/sse/gaudi/guides/ for setup instructions"
 
-# OpenMPI for multi-card
-export PATH="/opt/habanalabs/openmpi-5.0.8/bin:$PATH"
-export LD_LIBRARY_PATH="/opt/habanalabs/openmpi-5.0.8/lib:$LD_LIBRARY_PATH"
+        # Try loading conda environment if available
+        module load mamba/latest 2>/dev/null
+        source activate tau-gaudi 2>/dev/null || {
+            echo "ERROR: No Gaudi environment available"
+            echo "Please check /data/sse/gaudi/ for setup instructions"
+            exit 1
+        }
+    fi
+fi
 
-# libfabric for networking
-export LD_LIBRARY_PATH="/opt/habanalabs/libfabric-1.20.0/lib:$LD_LIBRARY_PATH"
-
-# RDMA core
-export LD_LIBRARY_PATH="/opt/habanalabs/rdma-core/lib64:$LD_LIBRARY_PATH"
+echo "Python: $(which python 2>/dev/null || echo 'not found')"
+echo "vLLM: $(python -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo 'not found')"
+echo ""
 
 # ========================================
-# Gaudi-specific Environment Variables
+# Habana Environment Variables
 # ========================================
-echo "=== Setting Gaudi Environment Variables ==="
+echo "=== Setting Habana Environment Variables ==="
 
-# Core Habana settings
-export HABANA_VISIBLE_DEVICES=all
-export PT_HPU_LAZY_MODE=1                    # Enable HPU Graphs for best performance
-export PT_HPU_ENABLE_LAZY_COLLECTIVES=true   # For tensor parallelism
+# Core Habana settings (may already be set by environment)
+export HABANA_VISIBLE_DEVICES=${HABANA_VISIBLE_DEVICES:-all}
+export PT_HPU_LAZY_MODE=${PT_HPU_LAZY_MODE:-1}
+export PT_HPU_ENABLE_LAZY_COLLECTIVES=${PT_HPU_ENABLE_LAZY_COLLECTIVES:-true}
 
-# vLLM Gaudi settings
-export VLLM_SKIP_WARMUP=false               # Warmup for production
-export VLLM_GRAPH_RESERVED_MEM=0.1          # 10% memory for graph capture
-export VLLM_GRAPH_PROMPT_RATIO=0.3          # Memory split prefill/decode
-
-# Debugging (uncomment if needed)
-# export VLLM_LOGGING_LEVEL=DEBUG
-# export VLLM_HPU_LOG_STEP_GRAPH_COMPILATION=1
+# vLLM settings
+export VLLM_SKIP_WARMUP=${VLLM_SKIP_WARMUP:-false}
 
 # HuggingFace cache
-export HF_HOME=/scratch/$USER/hf_cache
+export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
 mkdir -p $HF_HOME
 
 echo "HABANA_VISIBLE_DEVICES=$HABANA_VISIBLE_DEVICES"
@@ -128,31 +112,20 @@ echo "PT_HPU_LAZY_MODE=$PT_HPU_LAZY_MODE"
 echo "HF_HOME=$HF_HOME"
 echo ""
 
-# Verify Gaudi is available
-echo "=== Checking Gaudi Hardware ==="
-if command -v hl-smi &> /dev/null; then
-    hl-smi
-else
-    echo "WARNING: hl-smi not found. Gaudi drivers may not be loaded."
-    echo "Attempting to continue anyway..."
-fi
-echo ""
-
 # ========================================
 # Model Configuration
 # ========================================
-# Using smaller model for initial testing - adjust as needed
-# Gaudi 2 (HL-225) has ~96GB HBM, can fit larger models
-USER_MODEL="Qwen/Qwen3-8B"
-AGENT_MODEL="Qwen/Qwen3-8B"
+# Qwen models are supported on Gaudi (per slide 11)
+USER_MODEL="Qwen/Qwen2.5-7B-Instruct"
+AGENT_MODEL="Qwen/Qwen2.5-7B-Instruct"
 
 # Ports for local servers
 USER_PORT=8000
 AGENT_PORT=8001
 
-# Context length - Gaudi can handle longer contexts with block-size 128
-MAX_MODEL_LEN=16384
-BLOCK_SIZE=128  # Critical for BF16 performance on Gaudi
+# Context length - Gaudi2 has 96GB HBM
+MAX_MODEL_LEN=32768
+BLOCK_SIZE=128  # Optimal for BF16 on Gaudi
 
 echo "=== Configuration ==="
 echo "User Model: $USER_MODEL"
@@ -170,11 +143,8 @@ cleanup() {
     echo ""
     echo "=== Cleaning up ==="
     pkill -f "vllm serve" 2>/dev/null || true
-
-    # Kill by port
     fuser -k $USER_PORT/tcp 2>/dev/null || true
     fuser -k $AGENT_PORT/tcp 2>/dev/null || true
-
     echo "Cleanup complete"
 }
 
@@ -189,16 +159,13 @@ USER_LOG="$SCRIPT_DIR/logs/gaudi_user_${SLURM_JOB_ID}.log"
 
 # Install tau-bench
 cd "$REPO_ROOT"
-pip install -q -e .
+pip install -q -e . 2>/dev/null || pip install -e .
 
 echo "Starting User vLLM server..."
 echo "Log file: $USER_LOG"
 
 # Start vLLM with Gaudi device
-# Key differences from CUDA:
-#   --device hpu (explicitly specify Habana Processing Unit)
-#   --block-size 128 (optimal for BF16 on Gaudi)
-#   No --enforce-eager (HPU Graphs are preferred)
+# Key flags for Gaudi: --device hpu, --block-size 128
 vllm serve $USER_MODEL \
     --device hpu \
     --host 0.0.0.0 \
@@ -214,14 +181,14 @@ USER_PID=$!
 echo "User server PID: $USER_PID"
 
 # ========================================
-# Step 2: Start Agent (if using different model)
+# Step 2: Start Agent
 # ========================================
 echo "=== Step 2: Starting Agent ==="
 
 AGENT_LOG="$SCRIPT_DIR/logs/gaudi_agent_${SLURM_JOB_ID}.log"
 echo "Log file: $AGENT_LOG"
 
-# For tool-calling, we need --enable-auto-tool-choice
+# For tool-calling, enable auto tool choice
 vllm serve $AGENT_MODEL \
     --device hpu \
     --host 0.0.0.0 \
@@ -305,7 +272,7 @@ cd "$REPO_ROOT"
 echo "Working directory: $(pwd)"
 echo ""
 
-# Run a small test first
+# Run experiments
 TOTAL_EXPERIMENTS=0
 SUCCESSFUL_EXPERIMENTS=0
 
