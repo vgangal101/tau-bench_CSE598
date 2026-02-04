@@ -1,8 +1,6 @@
-# Intel Gaudi Experiments on SOL
+# Intel Gaudi Experiments for tau-bench
 
-This guide explains how to run tau-bench experiments on Intel Gaudi2 accelerators on the ASU SOL cluster.
-
-Based on the **ASU RC Workshop: "Introducing the Gaudi2 and Demystifying AI Processors"**
+This guide explains how to run tau-bench experiments on Intel Gaudi2 (HPU) accelerators on the ASU SOL cluster.
 
 ## SOL Gaudi2 Hardware
 
@@ -15,11 +13,154 @@ Based on the **ASU RC Workshop: "Introducing the Gaudi2 and Demystifying AI Proc
 | CPUs per node | 152 |
 | Driver | SynapseAI 1.23.0 |
 
-## Quick Start Options
+## Prerequisites
 
-### Option 1: Use SOL's Pre-hosted API (Easiest)
+1. **SOL Cluster Access**: You need an account on the ASU SOL cluster
+2. **SLURM Account**: `class_cse59827694spring2026`
+3. **tau-bench Environment**: Created automatically if missing
 
-SOL already has LLMs running on Gaudi2 with an OpenAI-compatible API. No local setup needed!
+## Quick Start
+
+### Submit a Single Experiment
+
+```bash
+# From the repository root directory
+cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
+
+# Submit a specific experiment
+sbatch SOL_env/4b_run/gaudi_experiment_4b_retail_act.sh
+```
+
+### Submit All Experiments
+
+```bash
+# Submit all 24 experiments at once
+for script in SOL_env/*/gaudi_experiment_*.sh; do sbatch $script; done
+```
+
+### Monitor Jobs
+
+```bash
+# Check job status
+squeue -u $USER
+
+# View job logs (replace JOB_ID with actual job ID)
+tail -f SOL_env/4b_run/logs/tau-gaudi-4b-retail-act_JOB_ID.out
+
+# Cancel a job
+scancel JOB_ID
+
+# Cancel all your jobs
+scancel -u $USER
+```
+
+## Available Scripts (24 Total)
+
+### Script Naming Convention
+```
+gaudi_experiment_{MODEL_SIZE}_{ENVIRONMENT}_{STRATEGY}.sh
+```
+
+### 4B Model Scripts
+| Environment | Strategy | Script |
+|-------------|----------|--------|
+| retail | act | `4b_run/gaudi_experiment_4b_retail_act.sh` |
+| retail | react | `4b_run/gaudi_experiment_4b_retail_react.sh` |
+| retail | tool-calling | `4b_run/gaudi_experiment_4b_retail_tool-calling.sh` |
+| airline | act | `4b_run/gaudi_experiment_4b_airline_act.sh` |
+| airline | react | `4b_run/gaudi_experiment_4b_airline_react.sh` |
+| airline | tool-calling | `4b_run/gaudi_experiment_4b_airline_tool-calling.sh` |
+
+### 8B Model Scripts
+| Environment | Strategy | Script |
+|-------------|----------|--------|
+| retail | act | `8b_run/gaudi_experiment_8b_retail_act.sh` |
+| retail | react | `8b_run/gaudi_experiment_8b_retail_react.sh` |
+| retail | tool-calling | `8b_run/gaudi_experiment_8b_retail_tool-calling.sh` |
+| airline | act | `8b_run/gaudi_experiment_8b_airline_act.sh` |
+| airline | react | `8b_run/gaudi_experiment_8b_airline_react.sh` |
+| airline | tool-calling | `8b_run/gaudi_experiment_8b_airline_tool-calling.sh` |
+
+### 14B Model Scripts
+| Environment | Strategy | Script |
+|-------------|----------|--------|
+| retail | act | `14b_run/gaudi_experiment_14b_retail_act.sh` |
+| retail | react | `14b_run/gaudi_experiment_14b_retail_react.sh` |
+| retail | tool-calling | `14b_run/gaudi_experiment_14b_retail_tool-calling.sh` |
+| airline | act | `14b_run/gaudi_experiment_14b_airline_act.sh` |
+| airline | react | `14b_run/gaudi_experiment_14b_airline_react.sh` |
+| airline | tool-calling | `14b_run/gaudi_experiment_14b_airline_tool-calling.sh` |
+
+### 32B Model Scripts
+| Environment | Strategy | Script |
+|-------------|----------|--------|
+| retail | act | `32b_run/gaudi_experiment_32b_retail_act.sh` |
+| retail | react | `32b_run/gaudi_experiment_32b_retail_react.sh` |
+| retail | tool-calling | `32b_run/gaudi_experiment_32b_retail_tool-calling.sh` |
+| airline | act | `32b_run/gaudi_experiment_32b_airline_act.sh` |
+| airline | react | `32b_run/gaudi_experiment_32b_airline_react.sh` |
+| airline | tool-calling | `32b_run/gaudi_experiment_32b_airline_tool-calling.sh` |
+
+## Configuration
+
+### Common Settings (All Scripts)
+
+| Setting | Value |
+|---------|-------|
+| MAX_MODEL_LEN | 32768 |
+| MAX_CONCURRENCY | 3 |
+| NUM_TRIALS | 5 |
+| Time Limit | 6 hours |
+| Partition | gaudi |
+| QOS | class_gaudi |
+| HPU | 1 x HL-225 (96GB HBM) |
+
+### Model-Specific Settings
+
+| Model | Memory | MAX_NUM_SEQS | GPU Util |
+|-------|--------|--------------|----------|
+| Qwen3-4B | 32G | 16 | 0.90 |
+| Qwen3-8B | 32G | 16 | 0.90 |
+| Qwen3-14B | 48G | 12 | 0.90 |
+| Qwen3-32B | 64G | 8 | 0.95 |
+
+### Port Assignments (to avoid conflicts)
+
+| Model | Retail Port | Airline Port |
+|-------|-------------|--------------|
+| 4B | 8000 | 8100 |
+| 8B | 8001 | 8101 |
+| 14B | 8002 | 8102 |
+| 32B | 8003 | 8103 |
+
+## Results Location
+
+Results are saved to:
+```
+SOL_env/{MODEL}_run/results_gaudi/{ENVIRONMENT}/{STRATEGY}/
+```
+
+Example:
+```
+SOL_env/4b_run/results_gaudi/retail/act/
+SOL_env/8b_run/results_gaudi/airline/react/
+```
+
+## Log Files
+
+Logs are saved to:
+```
+SOL_env/{MODEL}_run/logs/
+```
+
+Each job creates:
+- `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}_{JOB_ID}.out` - Main output
+- `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}_{JOB_ID}.err` - Error log
+- `gaudi_vllm_{MODEL}_{ENV}_{STRATEGY}_{JOB_ID}.log` - vLLM server log
+
+## Alternative: SOL's Hosted API
+
+SOL provides LLMs on Gaudi2 with an OpenAI-compatible API (no local setup needed).
 
 **Step 1: Get API Key**
 1. Go to https://voyager.rc.asu.edu/
@@ -32,167 +173,79 @@ export SOL_API_KEY="your-api-key"
 bash SOL_env/gaudi_api_experiment.sh
 ```
 
-**Available Models:**
+**Available Hosted Models:**
 | Model | Context Length |
 |-------|----------------|
-| llama4-scout-17b | 66K |
 | qwen3-30b-a3b-instruct-2507 | 131K |
 | qwen3-235b-a22b-instruct-2507 | 262K |
 
-### Option 2: Run Local vLLM on Gaudi Node
+## How It Works
 
-If you need custom models or configurations:
+1. **Job Submission**: Script submitted to SLURM gaudi partition
+2. **Environment Setup**: Cache directories and Gaudi env vars configured
+3. **vLLM Server Start**: Apptainer container launches vLLM with Qwen model
+4. **Health Check**: Waits for server (up to 15-30 min for large models)
+5. **tau-bench Run**: `python run.py` executes experiments
+6. **Cleanup**: vLLM server terminated
+
+## First-Time Setup
+
+Scripts auto-create the environment, but you can do it manually:
 
 ```bash
-sbatch SOL_env/gaudi_experiment.sh
+module load mamba/latest
+mamba create -n tau-bench -c conda-forge python=3.11 -y
+source activate tau-bench
+cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
+pip install -e .
 ```
-
-### Option 3: Interactive Gaudi Shell
-
-For development and testing:
-
-```bash
-interactive -p gaudi -c 30 --mem=30G -G 3 -t 0-6
-```
-
-## Pre-configured Environments on SOL
-
-SOL provides ready-to-use Jupyter kernels:
-
-| Kernel | Purpose |
-|--------|---------|
-| `gaudi-pytorch` | General PyTorch on Gaudi |
-| `gaudi-pytorch-vllm` | vLLM inference on Gaudi |
-| `gaudi-pytorch-diffusion` | Stable Diffusion on Gaudi |
-
-### Using Jupyter
-
-1. Go to SOL JupyterHub
-2. Select partition: `gaudi`
-3. QOS: `public`
-4. GPU Resources: `gpu:hl225:1`
-5. Select kernel: `gaudi-pytorch-vllm`
-
-## Gaudi Resources on SOL
-
-Pre-configured containers and guides are available at:
-
-```
-/data/sse/gaudi/
-/data/sse/gaudi/guides/
-/data/sse/gaudi/notebooks/
-```
-
-Example notebooks demonstrating MNIST training:
-- `/data/sse/gaudi/notebooks/mnist-training-lazy.ipynb`
-- `/data/sse/gaudi/notebooks/mnist-training-eager.ipynb`
-
-## SLURM Configuration
-
-### Interactive Session
-```bash
-interactive -p gaudi -c 30 --mem=30G -G 3 -t 0-6
-```
-
-### Batch Job Header
-```bash
-#SBATCH --partition=gaudi
-#SBATCH --qos=public
-#SBATCH --gres=gpu:hl225:1
-#SBATCH --cpus-per-task=30
-#SBATCH --mem=96G
-```
-
-## vLLM on Gaudi
-
-### Supported Models (from RC Workshop)
-- DeepSeek-R1
-- Llama 3.x
-- Qwen 2.5
-
-### vLLM Command for Gaudi
-```bash
-vllm serve Qwen/Qwen2.5-7B-Instruct \
-    --device hpu \
-    --block-size 128 \
-    --gpu-memory-utilization 0.90 \
-    --max-model-len 32768 \
-    --trust-remote-code
-```
-
-Key differences from CUDA:
-- `--device hpu` (explicitly specify Habana Processing Unit)
-- `--block-size 128` (optimal for BF16 on Gaudi)
-- No `--enforce-eager` (HPU Graphs preferred)
-
-## PyTorch on Gaudi
-
-### Code Modifications
-
-```python
-# Import Habana PyTorch core
-import habana_frameworks.torch.core as htcore
-
-# Target Gaudi device
-device = torch.device("hpu")
-
-# In lazy mode, call mark_step() after backward/optimizer
-loss.backward()
-htcore.mark_step()
-optimizer.step()
-htcore.mark_step()
-```
-
-### Execution Modes
-
-| Mode | Description |
-|------|-------------|
-| Eager | Standard PyTorch, immediate execution |
-| Lazy | Graph-based, requires `mark_step()` |
-| torch.compile | Modern replacement for lazy mode |
-
-## Available Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `gaudi_api_experiment.sh` | Use SOL's hosted API (no local setup) |
-| `gaudi_experiment.sh` | Run local vLLM on Gaudi node |
-| `gaudi_setup_check.sh` | Diagnostic to verify environment |
-
-## Checking Gaudi Status
-
-On a Gaudi node, use:
-```bash
-hl-smi
-```
-(equivalent to `nvidia-smi` for GPUs)
 
 ## Troubleshooting
 
-### "RuntimeError: Failed to infer device type"
-
-Standard vLLM tries to use CUDA. Solutions:
-1. Use SOL's pre-configured `gaudi-pytorch-vllm` environment
-2. Check `/data/sse/gaudi/guides/` for setup instructions
-3. Use the hosted API instead
-
-### Environment Not Found
-
-Check available resources:
+### Job Stuck in Queue
 ```bash
-ls -la /data/sse/gaudi/
-cat /data/sse/gaudi/guides/*.md
+squeue -p gaudi
+sacctmgr show user $USER withassoc
 ```
 
-### API Connection Failed
+### vLLM Server Failed
+Check the vLLM log:
+```bash
+cat SOL_env/4b_run/logs/gaudi_vllm_4b_retail_act_JOB_ID.log
+```
 
-1. Verify API key at https://voyager.rc.asu.edu/
-2. Check model availability on Voyager dashboard
-3. Test connection: `curl -H "Authorization: Bearer $SOL_API_KEY" https://openai.rc.asu.edu/v1/models`
+### Context Window Exceeded
+If you see `ContextWindowExceededError`, increase `MAX_MODEL_LEN` in the script.
+
+### Model Download Slow
+First run downloads weights to `/scratch/$USER/hf_cache`. Subsequent runs use cache.
+
+## Useful Commands
+
+```bash
+# Check Gaudi hardware (on compute node)
+hl-smi
+
+# Interactive Gaudi session
+interactive -p gaudi -c 30 --mem=30G -G 1 -t 0-2
+
+# View Gaudi nodes
+sinfo -p gaudi
+
+# Check available resources
+ls -la /data/sse/gaudi/
+```
+
+## Utility Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `gaudi_api_experiment.sh` | Use SOL's hosted API |
+| `gaudi_setup_check.sh` | Diagnostic to verify environment |
+| `gaudi_env_setup.sh` | Environment setup helper |
 
 ## References
 
 - [Habana Documentation](https://docs.habana.ai/en/latest/index.html)
 - [vLLM Gaudi Plugin](https://github.com/vllm-project/vllm-gaudi)
-- [Intel Gaudi2 White Paper](https://www.intel.com/content/www/us/en/content-details/839363/intel-gaudi-2-ai-accelerators-white-paper.html)
 - SOL Voyager: https://voyager.rc.asu.edu/
