@@ -81,8 +81,8 @@ MODEL="Qwen/Qwen3-4B"
 # Port for vLLM server (4B uses 8000, 32B uses 8001 to avoid conflicts)
 PORT=8000
 
-# Context length settings - tau-bench needs ~5000+ tokens
-MAX_MODEL_LEN=16384
+# Context length settings - match regular A100 scripts
+MAX_MODEL_LEN=32768
 MAX_NUM_SEQS=16
 
 # Experiment settings

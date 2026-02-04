@@ -83,9 +83,9 @@ MODEL="Qwen/Qwen3-32B"
 PORT=8001
 
 # Context length - 32B model (~64GB) leaves ~32GB for KV cache
-# Conservative setting to avoid OOM
-MAX_MODEL_LEN=8192
-MAX_NUM_SEQS=4
+# Match regular A100 scripts: 32768 tokens
+MAX_MODEL_LEN=32768
+MAX_NUM_SEQS=8
 
 # Experiment settings
 ENV="retail"
