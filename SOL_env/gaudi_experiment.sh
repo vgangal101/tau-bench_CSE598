@@ -3,9 +3,9 @@
 #SBATCH --partition=gaudi
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:hl225:2
-#SBATCH --cpus-per-task=60
-#SBATCH --mem=192G
-#SBATCH --time=06:00:00
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --time=04:00:00
 #SBATCH --output=tau-gaudi_%j.out
 #SBATCH --error=tau-gaudi_%j.err
 
