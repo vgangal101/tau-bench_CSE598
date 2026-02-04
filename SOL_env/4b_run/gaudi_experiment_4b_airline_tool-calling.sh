@@ -4,9 +4,9 @@
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:hl225:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --gres=gpu:hl225:3
+#SBATCH --cpus-per-task=24
+#SBATCH --mem=160G
 #SBATCH --time=06:00:00
 #SBATCH --output=4b-airline-tc-tau-gaudi_%j.out
 #SBATCH --error=4b-airline-tc-tau-gaudi_%j.err
@@ -28,10 +28,11 @@ export APPTAINER_TMPDIR="/scratch/$USER/apptainer_tmp"
 export HF_HOME="/scratch/$USER/hf_cache"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
-MODEL="Qwen/Qwen3-4B"
-PORT=8100
+USER_MODEL="Qwen/Qwen3-32B"
+AGENT_MODEL="Qwen/Qwen3-4B"
+USER_PORT=8300
+AGENT_PORT=8100
 MAX_MODEL_LEN=32768
-MAX_NUM_SEQS=16
 ENV="airline"
 STRATEGY="tool-calling"
 NUM_TRIALS=5
@@ -43,13 +44,10 @@ VLLM_CD="$GAUDI_BASE/vllm-fork/.cd"
 WORK_DIR="/scratch/$USER/gaudi_tau_bench_${SLURM_JOB_ID}"
 mkdir -p "$WORK_DIR/logs"
 
-cleanup() { pkill -f "vllm serve" 2>/dev/null || true; fuser -k $PORT/tcp 2>/dev/null || true; }
+cleanup() { pkill -f "vllm serve" 2>/dev/null || true; fuser -k $USER_PORT/tcp 2>/dev/null || true; fuser -k $AGENT_PORT/tcp 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
-SERVER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_4b_airline_tc_${SLURM_JOB_ID}.log"
-export APPTAINERENV_MODEL="$MODEL"
 export APPTAINERENV_HF_HOME=/mnt/hf_cache
-export APPTAINERENV_HABANA_VISIBLE_DEVICES=all
 export APPTAINERENV_PT_HPU_LAZY_MODE=0
 export APPTAINERENV_PT_HPU_ENABLE_LAZY_COLLECTIVES=True
 export APPTAINERENV_VLLM_SKIP_WARMUP=True
@@ -65,20 +63,38 @@ export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_MIN=128
 export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_STEP=256
 
 cd "$VLLM_CD"
-apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$MODEL" --host 0.0.0.0 --port $PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.90 --use-padding-aware-scheduling --max-num-seqs $MAX_NUM_SEQS --max-num-prefill-seqs 8 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$SERVER_LOG" 2>&1 &
 
-SERVER_PID=$!
-echo "vLLM server PID: $SERVER_PID"
+echo "=== Starting User Model Server (32B) ==="
+USER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_user_32b_${SLURM_JOB_ID}.log"
+export APPTAINERENV_HABANA_VISIBLE_DEVICES=0,1
+apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$USER_MODEL" --host 0.0.0.0 --port $USER_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 2 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.95 --use-padding-aware-scheduling --max-num-seqs 8 --max-num-prefill-seqs 2 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$USER_LOG" 2>&1 &
+USER_PID=$!
+
+echo "=== Starting Agent Model Server (4B) ==="
+AGENT_LOG="$SCRIPT_DIR/logs/gaudi_vllm_agent_4b_${SLURM_JOB_ID}.log"
+export APPTAINERENV_HABANA_VISIBLE_DEVICES=2
+apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.90 --use-padding-aware-scheduling --max-num-seqs 16 --max-num-prefill-seqs 8 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$AGENT_LOG" 2>&1 &
+AGENT_PID=$!
 
 check_server() { curl -s --connect-timeout 5 "http://localhost:${1}/health" > /dev/null 2>&1; return $?; }
-echo -n "Waiting for vLLM server..."
-SERVER_READY=0
-for i in {1..90}; do
-    if check_server "$PORT"; then SERVER_READY=1; echo " Ready! (${i}0s)"; break; fi
-    if ! kill -0 $SERVER_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$SERVER_LOG"; exit 1; fi
+
+echo -n "Waiting for User server (32B)..."
+for i in {1..180}; do
+    if check_server "$USER_PORT"; then echo " Ready! (${i}0s)"; break; fi
+    if ! kill -0 $USER_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$USER_LOG"; exit 1; fi
     echo -n "."; sleep 10
 done
-if [ $SERVER_READY -eq 0 ]; then echo " TIMEOUT!"; tail -100 "$SERVER_LOG"; exit 1; fi
+if ! check_server "$USER_PORT"; then echo " TIMEOUT!"; tail -100 "$USER_LOG"; exit 1; fi
+
+echo -n "Waiting for Agent server (4B)..."
+for i in {1..90}; do
+    if check_server "$AGENT_PORT"; then echo " Ready! (${i}0s)"; break; fi
+    if ! kill -0 $AGENT_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$AGENT_LOG"; exit 1; fi
+    echo -n "."; sleep 10
+done
+if ! check_server "$AGENT_PORT"; then echo " TIMEOUT!"; tail -100 "$AGENT_LOG"; exit 1; fi
+
+echo "Both servers ready!"
 
 module load mamba/latest
 source activate tau-bench 2>/dev/null || { mamba create -n tau-bench -c conda-forge python=3.11 -y; source activate tau-bench; cd "$REPO_ROOT"; pip install -e .; }
@@ -87,8 +103,10 @@ cd "$REPO_ROOT"; pip install -q -e . 2>/dev/null || pip install -e .
 export OPENAI_API_KEY="dummy"
 LOG_DIR="$SCRIPT_DIR/results_gaudi/${ENV}/${STRATEGY}"
 mkdir -p "$LOG_DIR"
-SERVER_URL="http://localhost:${PORT}/v1"
 
-python run.py --env ${ENV} --agent-strategy ${STRATEGY} --model ${MODEL} --model-provider openai --model-base-url ${SERVER_URL} --user-model ${MODEL} --user-model-provider openai --user-model-base-url ${SERVER_URL} --log-dir ${LOG_DIR} --max-concurrency ${MAX_CONCURRENCY} --num-trials ${NUM_TRIALS}
+USER_URL="http://localhost:${USER_PORT}/v1"
+AGENT_URL="http://localhost:${AGENT_PORT}/v1"
+
+python run.py --env ${ENV} --agent-strategy ${STRATEGY} --model ${AGENT_MODEL} --model-provider openai --model-base-url ${AGENT_URL} --user-model ${USER_MODEL} --user-model-provider openai --user-model-base-url ${USER_URL} --log-dir ${LOG_DIR} --max-concurrency ${MAX_CONCURRENCY} --num-trials ${NUM_TRIALS}
 
 echo "Results saved to: $LOG_DIR"; echo "Finished at: $(date)"

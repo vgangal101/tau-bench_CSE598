@@ -114,23 +114,46 @@ gaudi_experiment_{MODEL_SIZE}_{ENVIRONMENT}_{STRATEGY}.sh
 | Partition | gaudi |
 | QOS | class_gaudi |
 
-### Model-Specific Settings
+### Dual-Server Architecture
 
-| Model | HPUs | CPU Mem | MAX_NUM_SEQS | GPU Util | Tensor Parallel |
-|-------|------|---------|--------------|----------|-----------------|
-| Qwen3-4B | 1 | 32G | 16 | 0.90 | 1 |
-| Qwen3-8B | 1 | 32G | 16 | 0.90 | 1 |
-| Qwen3-14B | 1 | 48G | 12 | 0.90 | 1 |
-| Qwen3-32B | 2 | 128G | 8 | 0.95 | 2 |
+All experiments use a **consistent 32B user simulator** (Qwen3-32B) to ensure fair comparison across agent model sizes. The 4B, 8B, and 14B scripts run two separate vLLM servers:
+
+| Server | Model | HPUs | Tensor Parallel | Purpose |
+|--------|-------|------|-----------------|---------|
+| User Server | Qwen3-32B | 0,1 | 2 | User simulator |
+| Agent Server | Qwen3-{4B,8B,14B} | 2 | 1 | Agent model |
+
+### Resource Allocation by Agent Model
+
+| Agent Model | Total HPUs | CPUs | Memory | Architecture |
+|-------------|------------|------|--------|--------------|
+| Qwen3-4B | 3 | 24 | 160G | 32B (TP=2) + 4B (TP=1) |
+| Qwen3-8B | 3 | 24 | 160G | 32B (TP=2) + 8B (TP=1) |
+| Qwen3-14B | 3 | 24 | 160G | 32B (TP=2) + 14B (TP=1) |
+| Qwen3-32B | 2 | 16 | 128G | Single 32B (TP=2) |
+
+### Server Configuration Details
+
+| Server | MAX_NUM_SEQS | MAX_PREFILL | GPU Util |
+|--------|--------------|-------------|----------|
+| User (32B) | 8 | 2 | 0.95 |
+| Agent (4B) | 16 | 8 | 0.90 |
+| Agent (8B) | 16 | 8 | 0.90 |
+| Agent (14B) | 12 | 6 | 0.90 |
+| Agent (32B) | 8 | 2 | 0.95 |
 
 ### Port Assignments (to avoid conflicts)
 
-| Model | Retail Port | Airline Port |
-|-------|-------------|--------------|
-| 4B | 8000 | 8100 |
-| 8B | 8001 | 8101 |
-| 14B | 8002 | 8102 |
-| 32B | 8003 | 8103 |
+Each script uses two ports for the dual-server setup:
+
+| Agent Model | Retail User | Retail Agent | Airline User | Airline Agent |
+|-------------|-------------|--------------|--------------|---------------|
+| 4B | 8200 | 8000 | 8300 | 8100 |
+| 8B | 8201 | 8001 | 8301 | 8101 |
+| 14B | 8202 | 8002 | 8302 | 8102 |
+| 32B | - | 8003 | - | 8103 |
+
+Note: 32B scripts use a single server (same model for user and agent).
 
 ## Results Location
 
@@ -155,7 +178,10 @@ SOL_env/{MODEL}_run/logs/
 Each job creates:
 - `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}_{JOB_ID}.out` - Main output
 - `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}_{JOB_ID}.err` - Error log
-- `gaudi_vllm_{MODEL}_{ENV}_{STRATEGY}_{JOB_ID}.log` - vLLM server log
+- `gaudi_vllm_user_32b_{JOB_ID}.log` - User model (32B) vLLM server log
+- `gaudi_vllm_agent_{MODEL}_{JOB_ID}.log` - Agent model vLLM server log
+
+Note: 32B agent scripts have a single vLLM log since user and agent share the same server.
 
 ## Alternative: SOL's Hosted API
 
@@ -182,10 +208,13 @@ bash SOL_env/gaudi_api_experiment.sh
 
 1. **Job Submission**: Script submitted to SLURM gaudi partition
 2. **Environment Setup**: Cache directories and Gaudi env vars configured
-3. **vLLM Server Start**: Apptainer container launches vLLM with Qwen model
-4. **Health Check**: Waits for server (up to 15-30 min for large models)
-5. **tau-bench Run**: `python run.py` executes experiments
-6. **Cleanup**: vLLM server terminated
+3. **User Server Start**: Apptainer container launches vLLM with Qwen3-32B (TP=2 on HPUs 0,1)
+4. **Agent Server Start**: Second Apptainer container launches vLLM with agent model (TP=1 on HPU 2)
+5. **Health Check**: Waits for both servers (up to 30 min for 32B, 20 min for agent)
+6. **tau-bench Run**: `python run.py` with `--user-model-base-url` and `--model-base-url` pointing to separate servers
+7. **Cleanup**: Both vLLM servers terminated
+
+Note: 32B agent scripts use a single server for both user and agent models.
 
 ## First-Time Setup
 
@@ -208,9 +237,13 @@ sacctmgr show user $USER withassoc
 ```
 
 ### vLLM Server Failed
-Check the vLLM log:
+Check the vLLM logs (both user and agent servers):
 ```bash
-cat SOL_env/4b_run/logs/gaudi_vllm_4b_retail_act_JOB_ID.log
+# User model (32B) log
+cat SOL_env/4b_run/logs/gaudi_vllm_user_32b_JOB_ID.log
+
+# Agent model log
+cat SOL_env/4b_run/logs/gaudi_vllm_agent_4b_JOB_ID.log
 ```
 
 ### Context Window Exceeded
@@ -225,8 +258,8 @@ First run downloads weights to `/scratch/$USER/hf_cache`. Subsequent runs use ca
 # Check Gaudi hardware (on compute node)
 hl-smi
 
-# Interactive Gaudi session
-interactive -p gaudi -c 30 --mem=30G -G 1 -t 0-2
+# Interactive Gaudi session (3 HPUs for dual-server testing)
+interactive -p gaudi -c 24 --mem=160G -G 3 -t 0-6
 
 # View Gaudi nodes
 sinfo -p gaudi
