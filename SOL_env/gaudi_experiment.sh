@@ -2,9 +2,9 @@
 #SBATCH --job-name=tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:hl225:2
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=64G
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
 #SBATCH --time=04:00:00
 #SBATCH --output=tau-gaudi_%j.out
 #SBATCH --error=tau-gaudi_%j.err
@@ -207,107 +207,69 @@ start_vllm_server() {
 }
 
 # ========================================
-# Step 1: Start User Simulator Server (HPU 0)
+# Step 1: Start Single vLLM Server (same model for user and agent)
 # ========================================
-echo "=== Step 1: Starting User Simulator ==="
+echo "=== Step 1: Starting vLLM Server ==="
+echo "Note: Using single server for both user simulator and agent"
 
-USER_PID=$(start_vllm_server "$USER_MODEL" "$USER_PORT" "$WORK_DIR/user_logs" "user" "0")
-echo "User server PID: $USER_PID"
+USER_PID=$(start_vllm_server "$USER_MODEL" "$USER_PORT" "$WORK_DIR/user_logs" "vllm" "all")
+echo "vLLM server PID: $USER_PID"
 echo ""
 
-# Wait a bit before starting second server
-sleep 30
+# Use same server for agent
+AGENT_PORT=$USER_PORT
+AGENT_PID=$USER_PID
 
 # ========================================
-# Step 2: Start Agent Server (HPU 1)
+# Step 2: Wait for Server to be Ready
 # ========================================
-echo "=== Step 2: Starting Agent Server ==="
-
-AGENT_PID=$(start_vllm_server "$AGENT_MODEL" "$AGENT_PORT" "$WORK_DIR/agent_logs" "agent" "1")
-echo "Agent server PID: $AGENT_PID"
-echo ""
-
-# ========================================
-# Step 3: Wait for Servers to be Ready
-# ========================================
-echo "=== Step 3: Waiting for servers to be ready ==="
+echo "=== Step 2: Waiting for server to be ready ==="
 
 check_server() {
     curl -s --connect-timeout 5 "http://localhost:${1}/health" > /dev/null 2>&1
     return $?
 }
 
-# Wait for User Simulator
-echo -n "Waiting for User Simulator (port $USER_PORT)..."
-USER_READY=0
+echo -n "Waiting for vLLM server (port $USER_PORT)..."
+SERVER_READY=0
 for i in {1..90}; do
     if check_server "$USER_PORT"; then
-        USER_READY=1
+        SERVER_READY=1
         echo " Ready! (${i}0s)"
         break
     fi
     # Check if process is still running
     if ! kill -0 $USER_PID 2>/dev/null; then
         echo " FAILED! (process died)"
-        echo "Last 100 lines of user server log:"
-        tail -100 "$SCRIPT_DIR/logs/gaudi_user_${SLURM_JOB_ID}.log"
+        echo "Last 100 lines of server log:"
+        tail -100 "$SCRIPT_DIR/logs/gaudi_vllm_${SLURM_JOB_ID}.log"
         exit 1
     fi
     echo -n "."
     sleep 10
 done
 
-if [ $USER_READY -eq 0 ]; then
+if [ $SERVER_READY -eq 0 ]; then
     echo " TIMEOUT!"
-    echo "User Simulator did not start. Last 100 lines of log:"
-    tail -100 "$SCRIPT_DIR/logs/gaudi_user_${SLURM_JOB_ID}.log"
-    exit 1
-fi
-
-# Wait for Agent
-echo -n "Waiting for Agent (port $AGENT_PORT)..."
-AGENT_READY=0
-for i in {1..90}; do
-    if check_server "$AGENT_PORT"; then
-        AGENT_READY=1
-        echo " Ready! (${i}0s)"
-        break
-    fi
-    # Check if process is still running
-    if ! kill -0 $AGENT_PID 2>/dev/null; then
-        echo " FAILED! (process died)"
-        echo "Last 100 lines of agent server log:"
-        tail -100 "$SCRIPT_DIR/logs/gaudi_agent_${SLURM_JOB_ID}.log"
-        exit 1
-    fi
-    echo -n "."
-    sleep 10
-done
-
-if [ $AGENT_READY -eq 0 ]; then
-    echo " TIMEOUT!"
-    echo "Agent did not start. Last 100 lines of log:"
-    tail -100 "$SCRIPT_DIR/logs/gaudi_agent_${SLURM_JOB_ID}.log"
+    echo "vLLM server did not start. Last 100 lines of log:"
+    tail -100 "$SCRIPT_DIR/logs/gaudi_vllm_${SLURM_JOB_ID}.log"
     exit 1
 fi
 
 echo ""
-echo "Both servers are ready!"
+echo "Server is ready!"
 echo ""
 
-# Test the servers
-echo "=== Testing Servers ==="
-echo "User server models:"
+# Test the server
+echo "=== Testing Server ==="
+echo "Available models:"
 curl -s "http://localhost:$USER_PORT/v1/models" | head -20
 echo ""
-echo "Agent server models:"
-curl -s "http://localhost:$AGENT_PORT/v1/models" | head -20
-echo ""
 
 # ========================================
-# Step 4: Install tau-bench
+# Step 3: Install tau-bench
 # ========================================
-echo "=== Step 4: Installing tau-bench ==="
+echo "=== Step 3: Installing tau-bench ==="
 
 # Load mamba and activate tau-bench environment
 module load mamba/latest
@@ -324,9 +286,9 @@ pip install -q -e . 2>/dev/null || pip install -e .
 echo ""
 
 # ========================================
-# Step 5: Run Experiments
+# Step 4: Run Experiments
 # ========================================
-echo "=== Step 5: Running Experiments ==="
+echo "=== Step 4: Running Experiments ==="
 
 export OPENAI_API_KEY="dummy"
 
@@ -347,17 +309,20 @@ for ENV in retail airline; do
         LOG_DIR="$SCRIPT_DIR/results_gaudi/${ENV}/${STRATEGY}"
         mkdir -p "$LOG_DIR"
 
+        # Both user and agent use the same vLLM server
+        SERVER_URL="http://localhost:${USER_PORT}/v1"
+
         CMD="python run.py \
             --env ${ENV} \
             --agent-strategy ${STRATEGY} \
-            --model ${AGENT_MODEL} \
+            --model ${USER_MODEL} \
             --model-provider openai \
-            --model-base-url http://localhost:${AGENT_PORT}/v1 \
+            --model-base-url ${SERVER_URL} \
             --user-model ${USER_MODEL} \
             --user-model-provider openai \
-            --user-model-base-url http://localhost:${USER_PORT}/v1 \
+            --user-model-base-url ${SERVER_URL} \
             --log-dir ${LOG_DIR} \
-            --max-concurrency 2 \
+            --max-concurrency 1 \
             --num-trials 1 \
             --end-index 3 \
             --shuffle 0"
