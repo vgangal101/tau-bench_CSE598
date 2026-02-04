@@ -145,29 +145,37 @@ start_vllm_server() {
     local PORT=$2
     local LOG_DIR=$3
     local SERVER_NAME=$4
-    local EXTRA_ARGS=${5:-""}
+    local HPU_DEVICE=$5  # Which HPU to use (0 or 1)
 
     echo "Starting $SERVER_NAME server..."
     echo "  Model: $MODEL"
     echo "  Port: $PORT"
     echo "  Log dir: $LOG_DIR"
+    echo "  HPU Device: $HPU_DEVICE"
 
-    # Set environment variables for this server
+    # Set environment variables for this server (matching vllm_server.sh)
     export APPTAINERENV_MODEL="$MODEL"
     export APPTAINERENV_HF_HOME=/mnt/hf_cache
-    export APPTAINERENV_HABANA_VISIBLE_DEVICES=all
+    export APPTAINERENV_HABANA_VISIBLE_DEVICES=$HPU_DEVICE
     export APPTAINERENV_PT_HPU_LAZY_MODE=0
-    export APPTAINERENV_PT_HPU_ENABLE_LAZY_COLLECTIVES=0
-    export APPTAINERENV_MAX_MODEL_LEN=$MAX_MODEL_LEN
-    export APPTAINERENV_MAX_NUM_SEQS=$MAX_NUM_SEQS
-    export APPTAINERENV_GPU_MEMORY_UTILIZATION=0.85
+    export APPTAINERENV_PT_HPU_ENABLE_LAZY_COLLECTIVES=True
     export APPTAINERENV_VLLM_SKIP_WARMUP=True
+    export APPTAINERENV_VLLM_DELAYED_SAMPLING=True
     export APPTAINERENV_PYTHONUNBUFFERED=1
-    export APPTAINERENV_PORT=$PORT
-    export APPTAINERENV_HOST="0.0.0.0"
 
-    # Run the container
+    # Bucketing configuration
+    export APPTAINERENV_VLLM_PROMPT_BS_BUCKET_MIN=1
+    export APPTAINERENV_VLLM_PROMPT_BS_BUCKET_STEP=32
+    export APPTAINERENV_VLLM_DECODE_BS_BUCKET_MIN=1
+    export APPTAINERENV_VLLM_DECODE_BS_BUCKET_STEP=32
+    export APPTAINERENV_VLLM_PROMPT_SEQ_BUCKET_MIN=128
+    export APPTAINERENV_VLLM_PROMPT_SEQ_BUCKET_STEP=256
+    export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_MIN=128
+    export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_STEP=256
+
+    # Run the container with vllm serve (matching vllm_server.sh pattern)
     cd "$VLLM_CD"
+    mkdir -p "$LOG_DIR"
 
     apptainer exec \
         --bind /usr/lib64:/host-lib64 \
@@ -180,18 +188,31 @@ start_vllm_server() {
         --pwd /workspace/.cd \
         --writable-tmpfs \
         "$CONTAINER" \
-        python3 -m entrypoints.entrypoint_main server $EXTRA_ARGS \
+        vllm serve "$MODEL" \
+            --host 0.0.0.0 \
+            --port $PORT \
+            --block-size 128 \
+            --dtype bfloat16 \
+            --tensor-parallel-size 1 \
+            --download-dir /mnt/hf_cache \
+            --max-model-len $MAX_MODEL_LEN \
+            --gpu-memory-utilization 0.90 \
+            --use-padding-aware-scheduling \
+            --max-num-seqs $MAX_NUM_SEQS \
+            --max-num-prefill-seqs 8 \
+            --num-scheduler-steps 1 \
+            --disable-log-requests \
         > "$SCRIPT_DIR/logs/gaudi_${SERVER_NAME}_${SLURM_JOB_ID}.log" 2>&1 &
 
     echo $!
 }
 
 # ========================================
-# Step 1: Start User Simulator Server
+# Step 1: Start User Simulator Server (HPU 0)
 # ========================================
 echo "=== Step 1: Starting User Simulator ==="
 
-USER_PID=$(start_vllm_server "$USER_MODEL" "$USER_PORT" "$WORK_DIR/user_logs" "user")
+USER_PID=$(start_vllm_server "$USER_MODEL" "$USER_PORT" "$WORK_DIR/user_logs" "user" "0")
 echo "User server PID: $USER_PID"
 echo ""
 
@@ -199,12 +220,11 @@ echo ""
 sleep 30
 
 # ========================================
-# Step 2: Start Agent Server
+# Step 2: Start Agent Server (HPU 1)
 # ========================================
 echo "=== Step 2: Starting Agent Server ==="
 
-# For tool-calling, we may need additional flags
-AGENT_PID=$(start_vllm_server "$AGENT_MODEL" "$AGENT_PORT" "$WORK_DIR/agent_logs" "agent")
+AGENT_PID=$(start_vllm_server "$AGENT_MODEL" "$AGENT_PORT" "$WORK_DIR/agent_logs" "agent" "1")
 echo "Agent server PID: $AGENT_PID"
 echo ""
 
