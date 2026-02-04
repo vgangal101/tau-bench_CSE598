@@ -216,6 +216,68 @@ bash SOL_env/gaudi_api_experiment.sh
 
 Note: 32B agent scripts use a single server for both user and agent models.
 
+## Script Robustness Features
+
+All 24 Gaudi scripts include robustness features to prevent common issues:
+
+### 1. Exclusive Node Access (`--exclusive`)
+
+Each job gets exclusive access to a Gaudi node to prevent:
+- **Port conflicts**: Multiple jobs using the same ports
+- **HPU conflicts**: Hardcoded `HABANA_VISIBLE_DEVICES` causing resource contention
+
+```bash
+#SBATCH --exclusive  # One job per node
+```
+
+**Trade-off**: Jobs may wait longer in queue, but run reliably.
+
+### 2. PID-Based Process Cleanup
+
+The cleanup function uses process IDs instead of pattern matching:
+
+```bash
+# Safe - only kills this job's processes:
+cleanup() {
+    [ -n "$USER_PID" ] && kill $USER_PID 2>/dev/null
+    [ -n "$AGENT_PID" ] && kill $AGENT_PID 2>/dev/null
+    ...
+}
+
+# DANGEROUS - would kill ALL vLLM processes on node (including other jobs):
+# cleanup() { pkill -f "vllm serve" ... }  # DON'T DO THIS
+```
+
+**Why it matters**: If multiple jobs ran on the same node and one failed, `pkill -f` would kill the other job's vLLM servers.
+
+### 3. Stale Editable Install Fix
+
+Scripts uninstall before reinstalling tau-bench:
+
+```bash
+pip uninstall tau_bench -y 2>/dev/null || true
+pip install -e .
+```
+
+**Why it's needed**: Python editable installs create `.pth` files that point to the source directory. If the repo was moved or a previous install was corrupted, pip fails with:
+```
+OSError: [Errno 2] No such file or directory: '.../__editable__.tau_bench-0.1.0.pth'
+```
+
+**This is a user-level issue, NOT a node-level issue**:
+- The conda environment (`~/.conda/envs/tau-bench/`) is on shared filesystem
+- Same environment is used regardless of which node runs the job
+- Uninstall clears stale `.pth` files before fresh install
+
+### Issue Summary
+
+| Issue | Scope | Cause | Fix |
+|-------|-------|-------|-----|
+| Port conflicts | Node-level | Multiple jobs, same ports | `--exclusive` |
+| HPU conflicts | Node-level | Hardcoded `HABANA_VISIBLE_DEVICES` | `--exclusive` |
+| Process kill race | Node-level | `pkill -f` kills wrong processes | PID-based cleanup |
+| Stale `.pth` files | User-level | Moved repo or corrupted install | `pip uninstall` first |
+
 ## First-Time Setup
 
 Scripts auto-create the environment, but you can do it manually:
@@ -251,6 +313,27 @@ If you see `ContextWindowExceededError`, increase `MAX_MODEL_LEN` in the script.
 
 ### Model Download Slow
 First run downloads weights to `/scratch/$USER/hf_cache`. Subsequent runs use cache.
+
+### Stale Editable Install Error
+If you see:
+```
+OSError: [Errno 2] No such file or directory: '.../__editable__.tau_bench-0.1.0.pth'
+```
+This is handled automatically by the scripts (uninstall before install). If it persists, manually clean up:
+```bash
+source activate tau-bench
+pip uninstall tau_bench -y
+rm -f ~/.conda/envs/tau-bench/lib/python3.11/site-packages/__editable__.tau_bench*.pth
+```
+
+### vLLM Server Killed Unexpectedly
+If your vLLM server dies shortly after starting (e.g., "Shutdown complete" after 30-60 seconds), check if another job on the same node ran a cleanup. The `--exclusive` flag prevents this.
+
+### Jobs Interfering with Each Other
+If multiple jobs seem to affect each other:
+1. Verify `--exclusive` is in the SBATCH directives
+2. Check cleanup function uses PIDs, not `pkill -f`
+3. Check port assignments are unique per model/environment
 
 ## Useful Commands
 
