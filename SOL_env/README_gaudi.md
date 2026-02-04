@@ -1,6 +1,18 @@
-# Intel Gaudi Experiment Setup
+# Intel Gaudi Experiment Setup for SOL
 
-This guide explains how to run tau-bench experiments on Intel Gaudi accelerators (HPU) instead of NVIDIA GPUs.
+This guide explains how to run tau-bench experiments on Intel Gaudi accelerators (HPU) on the ASU SOL cluster.
+
+## SOL Gaudi Hardware
+
+SOL has Gaudi2 nodes with the following specs:
+
+| Component | Details |
+|-----------|---------|
+| Accelerator | HL-225 (Gaudi2) |
+| Cards per node | 8 |
+| Memory per card | 98GB HBM |
+| Driver | SynapseAI 1.23.0 |
+| Software location | `/opt/habanalabs/` |
 
 ## Why Standard vLLM Fails on Gaudi
 
@@ -16,47 +28,57 @@ This happens because:
 
 1. **Standard vLLM is CUDA-only** - It tries to load NVIDIA CUDA libraries
 2. **Gaudi requires a special plugin** - The `vllm-gaudi` hardware plugin
-3. **No Habana libraries detected** - vLLM couldn't find any supported accelerator
+3. **Habana Python packages not installed** - Need `habana_frameworks` and Habana PyTorch
 
-## Prerequisites
+## Available Scripts
 
-- Access to Gaudi partition on SOL cluster
-- Habana SynapseAI SDK installed on cluster (contact admin if missing)
-- Python 3.10 environment
+| Script | Purpose |
+|--------|---------|
+| `gaudi_env_setup.sh` | One-time environment setup (run on login node) |
+| `gaudi_setup_check.sh` | Diagnostic script to verify hardware |
+| `gaudi_experiment.sh` | Main experiment script |
 
 ## One-Time Environment Setup
 
-Run these commands on a SOL login node to create the Gaudi-compatible environment:
+Run the setup script from a **login node** (not a compute node):
 
 ```bash
-# Load modules (adjust based on your cluster)
-module load mamba/latest
-module load habana  # or habanalabs, intel-gaudi - depends on cluster
+cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
+bash SOL_env/gaudi_env_setup.sh
+```
 
-# Create conda environment
+This script will:
+1. Create a `tau-gaudi` conda environment with Python 3.10
+2. Install Habana PyTorch from the Habana vault
+3. Install `habana_frameworks`
+4. Clone and install `vllm-gaudi` plugin
+5. Install tau-bench
+
+### Manual Setup (if script fails)
+
+```bash
+# Load mamba
+module load mamba/latest
+
+# Create environment
 mamba create -n tau-gaudi python=3.10 -y
 source activate tau-gaudi
 
-# Clone vllm-gaudi and get verified vLLM commit
+# Install Habana PyTorch (for SynapseAI 1.23.0)
+pip install torch==2.6.0 --index-url https://vault.habana.ai/artifactory/api/pypi/gaudi-pypi/simple
+pip install habana_frameworks --index-url https://vault.habana.ai/artifactory/api/pypi/gaudi-pypi/simple
+
+# Clone and install vllm-gaudi
 cd /scratch/$USER
 git clone https://github.com/vllm-project/vllm-gaudi
 cd vllm-gaudi
-export VLLM_COMMIT=$(git show "origin/vllm/last-good-commit-for-vllm-gaudi:VLLM_STABLE_COMMIT" 2>/dev/null)
-echo "Using vLLM commit: $VLLM_COMMIT"
+VLLM_COMMIT=$(git show "origin/vllm/last-good-commit-for-vllm-gaudi:VLLM_STABLE_COMMIT")
 cd ..
 
-# Install vLLM for empty platform (bypasses CUDA dependency)
 git clone https://github.com/vllm-project/vllm
-cd vllm
-git checkout $VLLM_COMMIT
-pip install -r <(sed '/^torch/d' requirements/build.txt)
+cd vllm && git checkout $VLLM_COMMIT
 VLLM_TARGET_DEVICE=empty pip install --no-build-isolation -e .
-cd ..
-
-# Install Gaudi plugin
-cd vllm-gaudi
-pip install -e .
-cd ..
+cd ../vllm-gaudi && pip install -e .
 
 # Install tau-bench
 cd /scratch/$USER/tau-bench-project/tau-bench_CSE598

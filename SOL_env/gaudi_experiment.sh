@@ -62,26 +62,43 @@ echo "Repository root: $REPO_ROOT"
 echo ""
 
 # ========================================
-# Environment Setup for Gaudi
+# Environment Setup for Gaudi on SOL
 # ========================================
 echo "=== Setting up Gaudi Environment ==="
 
-# Load Habana modules (adjust based on your cluster's module names)
-# Common module names - uncomment/modify based on your cluster:
-# module load habana/1.18.0
-# module load habanalabs
-# module load intel-gaudi
+# Load mamba for conda
+module load mamba/latest
 
-# Try common module patterns
-module load mamba/latest 2>/dev/null || true
-module load habana 2>/dev/null || echo "Note: habana module not found, assuming pre-configured environment"
-
-# Activate conda environment (adjust name as needed)
-# For a new environment, create with: conda create -n tau-gaudi python=3.10
-source activate tau-gaudi 2>/dev/null || source activate tau-bench 2>/dev/null || {
-    echo "WARNING: Could not activate conda environment"
-    echo "Make sure you have created the tau-gaudi environment with vllm-gaudi installed"
+# Activate the tau-gaudi conda environment
+source activate tau-gaudi || {
+    echo "ERROR: tau-gaudi environment not found!"
+    echo "Run this first: bash SOL_env/gaudi_env_setup.sh"
+    exit 1
 }
+
+echo "Conda environment: $CONDA_DEFAULT_ENV"
+echo "Python: $(which python)"
+
+# ========================================
+# Habana Environment Variables for SOL
+# ========================================
+# Habana software is installed at /opt/habanalabs on SOL Gaudi nodes
+
+# Add Habana binaries to PATH
+export PATH="/opt/habanalabs/bin:$PATH"
+
+# Add Habana libraries to LD_LIBRARY_PATH
+export LD_LIBRARY_PATH="/opt/habanalabs/lib:$LD_LIBRARY_PATH"
+
+# OpenMPI for multi-card
+export PATH="/opt/habanalabs/openmpi-5.0.8/bin:$PATH"
+export LD_LIBRARY_PATH="/opt/habanalabs/openmpi-5.0.8/lib:$LD_LIBRARY_PATH"
+
+# libfabric for networking
+export LD_LIBRARY_PATH="/opt/habanalabs/libfabric-1.20.0/lib:$LD_LIBRARY_PATH"
+
+# RDMA core
+export LD_LIBRARY_PATH="/opt/habanalabs/rdma-core/lib64:$LD_LIBRARY_PATH"
 
 # ========================================
 # Gaudi-specific Environment Variables
