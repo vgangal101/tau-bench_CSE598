@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=tau-gaudi
 #SBATCH --partition=gaudi
+#SBATCH --qos=class_gaudi
+#SBATCH --account=class_cse59827694spring2026
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:hl225:1
 #SBATCH --cpus-per-task=8
