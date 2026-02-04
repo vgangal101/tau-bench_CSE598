@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=tau-gaudi
 #SBATCH --partition=gaudi
-#SBATCH --qos=public
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:hl225:2
 #SBATCH --cpus-per-task=60
