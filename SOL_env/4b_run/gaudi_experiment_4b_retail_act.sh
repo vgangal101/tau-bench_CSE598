@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=tau-gaudi-4b-retail-act
+#SBATCH --job-name=4b-retail-act-tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=06:00:00
-#SBATCH --output=tau-gaudi-4b-retail-act_%j.out
-#SBATCH --error=tau-gaudi-4b-retail-act_%j.err
+#SBATCH --output=4b-retail-act-tau-gaudi_%j.out
+#SBATCH --error=4b-retail-act-tau-gaudi_%j.err
 
 # ========================================
 # Gaudi 4B Retail Act Experiment
