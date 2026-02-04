@@ -90,7 +90,7 @@ MAX_NUM_SEQS=8
 ENV="airline"
 STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=5
+MAX_CONCURRENCY=3
 
 echo "=== Configuration ==="
 echo "Model: $MODEL"
