@@ -275,12 +275,11 @@ source activate tau-bench 2>/dev/null || {
     echo "Creating tau-bench environment..."
     mamba create -n tau-bench -c conda-forge python=3.11 -y
     source activate tau-bench
-    cd "$REPO_ROOT"
-    pip install -e .
 }
 
 cd "$REPO_ROOT"
-pip uninstall tau_bench -y 2>/dev/null || true; pip install -e .
+pip uninstall tau_bench -y 2>/dev/null || true
+pip install -e .
 echo ""
 
 # ========================================

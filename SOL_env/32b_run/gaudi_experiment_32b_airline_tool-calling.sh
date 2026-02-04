@@ -82,7 +82,7 @@ done
 if [ $SERVER_READY -eq 0 ]; then echo " TIMEOUT!"; tail -100 "$SERVER_LOG"; exit 1; fi
 
 module load mamba/latest
-source activate tau-bench 2>/dev/null || { mamba create -n tau-bench -c conda-forge python=3.11 -y; source activate tau-bench; cd "$REPO_ROOT"; pip install -e .; }
+source activate tau-bench 2>/dev/null || { mamba create -n tau-bench -c conda-forge python=3.11 -y; source activate tau-bench; }
 cd "$REPO_ROOT"; pip uninstall tau_bench -y 2>/dev/null || true; pip install -e .
 
 export OPENAI_API_KEY="dummy"
