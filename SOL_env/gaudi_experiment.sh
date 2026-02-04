@@ -20,9 +20,9 @@
 
 set -e
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Use SLURM_SUBMIT_DIR for reliable path resolution
+SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env"
+REPO_ROOT="${SLURM_SUBMIT_DIR}"
 
 # Create logs directory
 mkdir -p "$SCRIPT_DIR/logs"
