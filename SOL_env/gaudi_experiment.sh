@@ -70,16 +70,16 @@ echo ""
 # ========================================
 # Model Configuration
 # ========================================
-# Using Qwen models (supported on Gaudi per documentation)
-USER_MODEL="Qwen/Qwen2.5-7B-Instruct"
-AGENT_MODEL="Qwen/Qwen2.5-7B-Instruct"
+# Using Qwen3-4B (smaller model, fits on single HPU with longer context)
+USER_MODEL="Qwen/Qwen3-4B"
+AGENT_MODEL="Qwen/Qwen3-4B"
 
 # Ports for local servers
 USER_PORT=8000
 AGENT_PORT=8001
 
-# Context length settings
-MAX_MODEL_LEN=4096
+# Context length settings - tau-bench needs ~5000+ tokens
+MAX_MODEL_LEN=8192
 MAX_NUM_SEQS=16
 
 echo "=== Configuration ==="
@@ -203,6 +203,8 @@ start_vllm_server() {
             --max-num-prefill-seqs 8 \
             --num-scheduler-steps 1 \
             --disable-log-requests \
+            --enable-auto-tool-choice \
+            --tool-call-parser hermes \
         > "$SCRIPT_DIR/logs/gaudi_${SERVER_NAME}_${SLURM_JOB_ID}.log" 2>&1 &
 
     echo $!
