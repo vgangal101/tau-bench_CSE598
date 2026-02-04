@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=32b-retail-act-tau-gaudi
+#SBATCH --job-name=32b-airline-act-tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
@@ -8,17 +8,17 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=06:00:00
-#SBATCH --output=32b-retail-act-tau-gaudi_%j.out
-#SBATCH --error=32b-retail-act-tau-gaudi_%j.err
+#SBATCH --output=32b-airline-act-tau-gaudi_%j.out
+#SBATCH --error=32b-airline-act-tau-gaudi_%j.err
 
 # ========================================
-# Gaudi 32B Retail Act Experiment (Single Node)
+# Gaudi 32B Airline Act Experiment (Single Node)
 # ========================================
 # Configuration:
 #   - Nodes: 1
 #   - HPUs: 1 x HL-225 (Gaudi2, 96GB HBM)
 #   - Model: Qwen3-32B (same for user and agent)
-#   - Environment: retail
+#   - Environment: airline
 #   - Strategy: act
 #   - Trials: 5
 #   - Max Concurrency: 2
@@ -34,11 +34,11 @@ REPO_ROOT="${SLURM_SUBMIT_DIR}"
 mkdir -p "$SCRIPT_DIR/logs"
 
 # Redirect all output to log files
-exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act_${SLURM_JOB_ID}.out") 2>&1
-exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act_${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-act_${SLURM_JOB_ID}.out") 2>&1
+exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-act_${SLURM_JOB_ID}.err" >&2)
 
 echo "========================================"
-echo "=== Gaudi 32B Retail Act (Single Node) ==="
+echo "=== Gaudi 32B Airline Act (Single Node) ==="
 echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -79,16 +79,15 @@ echo ""
 # Using Qwen3-32B - fits on single 96GB HPU with limited context
 MODEL="Qwen/Qwen3-32B"
 
-# Port for vLLM server (32B uses 8001, 4B uses 8000 to avoid conflicts)
-PORT=8001
+# Port for vLLM server (32B airline uses 8103 to avoid conflicts)
+PORT=8103
 
-# Context length - 32B model (~64GB) leaves ~32GB for KV cache
-# Match regular A100 scripts: 32768 tokens
+# Context length - match regular A100 scripts
 MAX_MODEL_LEN=32768
 MAX_NUM_SEQS=8
 
 # Experiment settings
-ENV="retail"
+ENV="airline"
 STRATEGY="act"
 NUM_TRIALS=5
 MAX_CONCURRENCY=5
@@ -154,7 +153,7 @@ trap cleanup EXIT INT TERM
 # ========================================
 echo "=== Step 1: Starting vLLM Server ==="
 
-SERVER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_32b_${SLURM_JOB_ID}.log"
+SERVER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_32b_airline_${SLURM_JOB_ID}.log"
 
 echo "Starting vLLM server..."
 echo "  Model: $MODEL"
@@ -342,6 +341,6 @@ echo "Results saved to: $LOG_DIR"
 echo ""
 
 echo "========================================"
-echo "=== Gaudi 32B Retail Act Complete ==="
+echo "=== Gaudi 32B Airline Act Complete ==="
 echo "========================================"
 echo "Finished at: $(date)"

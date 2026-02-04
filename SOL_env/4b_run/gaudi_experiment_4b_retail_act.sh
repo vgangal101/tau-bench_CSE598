@@ -89,7 +89,7 @@ MAX_NUM_SEQS=16
 ENV="retail"
 STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=3
+MAX_CONCURRENCY=5
 
 echo "=== Configuration ==="
 echo "Model: $MODEL"

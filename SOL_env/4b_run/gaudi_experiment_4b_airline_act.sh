@@ -1,44 +1,43 @@
 #!/bin/bash
-#SBATCH --job-name=32b-retail-act-tau-gaudi
+#SBATCH --job-name=4b-airline-act-tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:hl225:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --mem=32G
 #SBATCH --time=06:00:00
-#SBATCH --output=32b-retail-act-tau-gaudi_%j.out
-#SBATCH --error=32b-retail-act-tau-gaudi_%j.err
+#SBATCH --output=4b-airline-act-tau-gaudi_%j.out
+#SBATCH --error=4b-airline-act-tau-gaudi_%j.err
 
 # ========================================
-# Gaudi 32B Retail Act Experiment (Single Node)
+# Gaudi 4B Airline Act Experiment
 # ========================================
 # Configuration:
-#   - Nodes: 1
 #   - HPUs: 1 x HL-225 (Gaudi2, 96GB HBM)
-#   - Model: Qwen3-32B (same for user and agent)
-#   - Environment: retail
+#   - Model: Qwen3-4B (same for user and agent)
+#   - Environment: airline
 #   - Strategy: act
 #   - Trials: 5
-#   - Max Concurrency: 2
+#   - Max Concurrency: 3
 # ========================================
 
 set -e
 
 # Use SLURM_SUBMIT_DIR for reliable path resolution
-SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/32b_run"
+SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/4b_run"
 REPO_ROOT="${SLURM_SUBMIT_DIR}"
 
 # Create logs directory
 mkdir -p "$SCRIPT_DIR/logs"
 
 # Redirect all output to log files
-exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act_${SLURM_JOB_ID}.out") 2>&1
-exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act_${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-4b-airline-act_${SLURM_JOB_ID}.out") 2>&1
+exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-4b-airline-act_${SLURM_JOB_ID}.err" >&2)
 
 echo "========================================"
-echo "=== Gaudi 32B Retail Act (Single Node) ==="
+echo "=== Gaudi 4B Airline Act Experiment ==="
 echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -76,19 +75,17 @@ echo ""
 # ========================================
 # Model Configuration
 # ========================================
-# Using Qwen3-32B - fits on single 96GB HPU with limited context
-MODEL="Qwen/Qwen3-32B"
+MODEL="Qwen/Qwen3-4B"
 
-# Port for vLLM server (32B uses 8001, 4B uses 8000 to avoid conflicts)
-PORT=8001
+# Port for vLLM server (4B airline uses 8100 to avoid conflicts)
+PORT=8100
 
-# Context length - 32B model (~64GB) leaves ~32GB for KV cache
-# Match regular A100 scripts: 32768 tokens
+# Context length settings - match regular A100 scripts
 MAX_MODEL_LEN=32768
-MAX_NUM_SEQS=8
+MAX_NUM_SEQS=16
 
 # Experiment settings
-ENV="retail"
+ENV="airline"
 STRATEGY="act"
 NUM_TRIALS=5
 MAX_CONCURRENCY=5
@@ -96,7 +93,6 @@ MAX_CONCURRENCY=5
 echo "=== Configuration ==="
 echo "Model: $MODEL"
 echo "Max Model Length: $MAX_MODEL_LEN"
-echo "Max Num Seqs: $MAX_NUM_SEQS"
 echo "Port: $PORT"
 echo "Environment: $ENV"
 echo "Strategy: $STRATEGY"
@@ -154,7 +150,7 @@ trap cleanup EXIT INT TERM
 # ========================================
 echo "=== Step 1: Starting vLLM Server ==="
 
-SERVER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_32b_${SLURM_JOB_ID}.log"
+SERVER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_4b_airline_${SLURM_JOB_ID}.log"
 
 echo "Starting vLLM server..."
 echo "  Model: $MODEL"
@@ -204,10 +200,10 @@ apptainer exec \
         --tensor-parallel-size 1 \
         --download-dir /mnt/hf_cache \
         --max-model-len $MAX_MODEL_LEN \
-        --gpu-memory-utilization 0.95 \
+        --gpu-memory-utilization 0.90 \
         --use-padding-aware-scheduling \
         --max-num-seqs $MAX_NUM_SEQS \
-        --max-num-prefill-seqs 2 \
+        --max-num-prefill-seqs 8 \
         --num-scheduler-steps 1 \
         --disable-log-requests \
         --enable-auto-tool-choice \
@@ -230,7 +226,7 @@ check_server() {
 
 echo -n "Waiting for vLLM server (port $PORT)..."
 SERVER_READY=0
-for i in {1..180}; do  # 30 min timeout for 32B model download/load
+for i in {1..90}; do
     if check_server "$PORT"; then
         SERVER_READY=1
         echo " Ready! (${i}0s)"
@@ -294,7 +290,7 @@ echo "Working directory: $(pwd)"
 echo ""
 
 # Results directory
-LOG_DIR="$SCRIPT_DIR/results_gaudi/${ENV}/${STRATEGY}"
+LOG_DIR="$SCRIPT_DIR/results_gaudi_4b/${ENV}/${STRATEGY}"
 mkdir -p "$LOG_DIR"
 
 SERVER_URL="http://localhost:${PORT}/v1"
@@ -342,6 +338,6 @@ echo "Results saved to: $LOG_DIR"
 echo ""
 
 echo "========================================"
-echo "=== Gaudi 32B Retail Act Complete ==="
+echo "=== Gaudi 4B Airline Act Complete ==="
 echo "========================================"
 echo "Finished at: $(date)"
