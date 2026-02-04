@@ -3,21 +3,21 @@
 #SBATCH --partition=gaudi
 #SBATCH --qos=public
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:hl225:1
-#SBATCH --cpus-per-task=30
-#SBATCH --mem=96G
-#SBATCH --time=04:00:00
+#SBATCH --gres=gpu:hl225:2
+#SBATCH --cpus-per-task=60
+#SBATCH --mem=192G
+#SBATCH --time=06:00:00
 #SBATCH --output=tau-gaudi_%j.out
 #SBATCH --error=tau-gaudi_%j.err
 
 # ========================================
 # Intel Gaudi Experiment Script for SOL
 # ========================================
-# This script runs tau-bench experiments on Intel Gaudi2 accelerators
-# using the pre-configured gaudi-pytorch-vllm environment on SOL.
-#
-# Based on ASU RC Workshop "Introducing the Gaudi2"
+# Uses Apptainer container-based vLLM for Gaudi
+# Based on /data/sse/gaudi/guides documentation
 # ========================================
+
+set -e
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +31,7 @@ exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi_${SLURM_JOB_ID}.out") 2>&1
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi_${SLURM_JOB_ID}.err" >&2)
 
 echo "========================================"
-echo "=== Intel Gaudi Experiment ==="
+echo "=== Intel Gaudi Experiment (Apptainer) ==="
 echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -44,78 +44,32 @@ echo ""
 # Check Gaudi Hardware
 # ========================================
 echo "=== Checking Gaudi Hardware ==="
-hl-smi
+hl-smi || echo "hl-smi not available yet"
 echo ""
 
 # ========================================
-# Environment Setup - Use SOL's Pre-configured Environment
+# Environment Setup - Cache Redirects
 # ========================================
-echo "=== Setting up Environment ==="
+echo "=== Setting up Cache Directories ==="
 
-# Check for guides and containers
-echo "Available Gaudi resources on SOL:"
-ls -la /data/sse/gaudi/ 2>/dev/null || echo "Note: /data/sse/gaudi not accessible"
-echo ""
+# Source cache redirects from SOL's gaudi scripts
+source /data/sse/gaudi/scripts/cache-redirects.sh /scratch/$USER
 
-# Source the gaudi-pytorch-vllm environment
-# This is pre-configured by SOL admins with all Habana packages
-if [ -f "/data/sse/gaudi/activate_vllm.sh" ]; then
-    echo "Sourcing /data/sse/gaudi/activate_vllm.sh"
-    source /data/sse/gaudi/activate_vllm.sh
-elif [ -f "/data/sse/gaudi/env/vllm/bin/activate" ]; then
-    echo "Activating vLLM virtual environment"
-    source /data/sse/gaudi/env/vllm/bin/activate
-else
-    # Fall back to using Apptainer/Singularity container
-    echo "Looking for Apptainer container..."
-    CONTAINER=$(find /data/sse/gaudi -name "*.sif" 2>/dev/null | head -1)
-    if [ -n "$CONTAINER" ]; then
-        echo "Found container: $CONTAINER"
-        USE_CONTAINER=true
-    else
-        echo "WARNING: No pre-configured environment found"
-        echo "Check /data/sse/gaudi/guides/ for setup instructions"
+# Additional cache directories
+export APPTAINER_CACHEDIR="/scratch/$USER/apptainer_cache"
+export APPTAINER_TMPDIR="/scratch/$USER/apptainer_tmp"
+export HF_HOME="/scratch/$USER/hf_cache"
 
-        # Try loading conda environment if available
-        module load mamba/latest 2>/dev/null
-        source activate tau-gaudi 2>/dev/null || {
-            echo "ERROR: No Gaudi environment available"
-            echo "Please check /data/sse/gaudi/ for setup instructions"
-            exit 1
-        }
-    fi
-fi
+mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
-echo "Python: $(which python 2>/dev/null || echo 'not found')"
-echo "vLLM: $(python -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo 'not found')"
-echo ""
-
-# ========================================
-# Habana Environment Variables
-# ========================================
-echo "=== Setting Habana Environment Variables ==="
-
-# Core Habana settings (may already be set by environment)
-export HABANA_VISIBLE_DEVICES=${HABANA_VISIBLE_DEVICES:-all}
-export PT_HPU_LAZY_MODE=${PT_HPU_LAZY_MODE:-1}
-export PT_HPU_ENABLE_LAZY_COLLECTIVES=${PT_HPU_ENABLE_LAZY_COLLECTIVES:-true}
-
-# vLLM settings
-export VLLM_SKIP_WARMUP=${VLLM_SKIP_WARMUP:-false}
-
-# HuggingFace cache
-export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
-mkdir -p $HF_HOME
-
-echo "HABANA_VISIBLE_DEVICES=$HABANA_VISIBLE_DEVICES"
-echo "PT_HPU_LAZY_MODE=$PT_HPU_LAZY_MODE"
 echo "HF_HOME=$HF_HOME"
+echo "APPTAINER_CACHEDIR=$APPTAINER_CACHEDIR"
 echo ""
 
 # ========================================
 # Model Configuration
 # ========================================
-# Qwen models are supported on Gaudi (per slide 11)
+# Using Qwen models (supported on Gaudi per documentation)
 USER_MODEL="Qwen/Qwen2.5-7B-Instruct"
 AGENT_MODEL="Qwen/Qwen2.5-7B-Instruct"
 
@@ -123,17 +77,49 @@ AGENT_MODEL="Qwen/Qwen2.5-7B-Instruct"
 USER_PORT=8000
 AGENT_PORT=8001
 
-# Context length - Gaudi2 has 96GB HBM
-MAX_MODEL_LEN=32768
-BLOCK_SIZE=128  # Optimal for BF16 on Gaudi
+# Context length settings
+MAX_MODEL_LEN=4096
+MAX_NUM_SEQS=16
 
 echo "=== Configuration ==="
 echo "User Model: $USER_MODEL"
 echo "Agent Model: $AGENT_MODEL"
 echo "Max Model Length: $MAX_MODEL_LEN"
-echo "Block Size: $BLOCK_SIZE"
+echo "Max Num Seqs: $MAX_NUM_SEQS"
 echo "User Port: $USER_PORT"
 echo "Agent Port: $AGENT_PORT"
+echo ""
+
+# ========================================
+# Gaudi Container and Paths
+# ========================================
+GAUDI_BASE="/data/sse/gaudi"
+CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
+VLLM_CD="$GAUDI_BASE/vllm-fork/.cd"
+
+echo "=== Gaudi Paths ==="
+echo "Container: $CONTAINER"
+echo "vLLM .cd dir: $VLLM_CD"
+
+if [ ! -f "$CONTAINER" ]; then
+    echo "ERROR: Container not found at $CONTAINER"
+    ls -la "$GAUDI_BASE/containers/" 2>/dev/null || echo "Cannot list containers directory"
+    exit 1
+fi
+
+if [ ! -d "$VLLM_CD" ]; then
+    echo "ERROR: vLLM .cd directory not found at $VLLM_CD"
+    exit 1
+fi
+echo ""
+
+# ========================================
+# Create Working Directories
+# ========================================
+WORK_DIR="/scratch/$USER/gaudi_tau_bench_${SLURM_JOB_ID}"
+mkdir -p "$WORK_DIR/user_logs" "$WORK_DIR/agent_logs"
+
+echo "Working directory: $WORK_DIR"
 echo ""
 
 # ========================================
@@ -142,7 +128,8 @@ echo ""
 cleanup() {
     echo ""
     echo "=== Cleaning up ==="
-    pkill -f "vllm serve" 2>/dev/null || true
+    # Kill any vLLM processes
+    pkill -f "entrypoint_main" 2>/dev/null || true
     fuser -k $USER_PORT/tcp 2>/dev/null || true
     fuser -k $AGENT_PORT/tcp 2>/dev/null || true
     echo "Cleanup complete"
@@ -151,58 +138,73 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ========================================
-# Step 1: Start User Simulator
+# Function to Start vLLM Server via Apptainer
+# ========================================
+start_vllm_server() {
+    local MODEL=$1
+    local PORT=$2
+    local LOG_DIR=$3
+    local SERVER_NAME=$4
+    local EXTRA_ARGS=${5:-""}
+
+    echo "Starting $SERVER_NAME server..."
+    echo "  Model: $MODEL"
+    echo "  Port: $PORT"
+    echo "  Log dir: $LOG_DIR"
+
+    # Set environment variables for this server
+    export APPTAINERENV_MODEL="$MODEL"
+    export APPTAINERENV_HF_HOME=/mnt/hf_cache
+    export APPTAINERENV_HABANA_VISIBLE_DEVICES=all
+    export APPTAINERENV_PT_HPU_LAZY_MODE=0
+    export APPTAINERENV_PT_HPU_ENABLE_LAZY_COLLECTIVES=0
+    export APPTAINERENV_MAX_MODEL_LEN=$MAX_MODEL_LEN
+    export APPTAINERENV_MAX_NUM_SEQS=$MAX_NUM_SEQS
+    export APPTAINERENV_GPU_MEMORY_UTILIZATION=0.85
+    export APPTAINERENV_VLLM_SKIP_WARMUP=True
+    export APPTAINERENV_PYTHONUNBUFFERED=1
+    export APPTAINERENV_PORT=$PORT
+    export APPTAINERENV_HOST="0.0.0.0"
+
+    # Run the container
+    cd "$VLLM_CD"
+
+    apptainer exec \
+        --bind /usr/lib64:/host-lib64 \
+        --bind /usr/lib/habanalabs:/usr/lib/habanalabs \
+        --bind /opt/habanalabs:/opt/habanalabs \
+        --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl \
+        --bind "$HF_HOME:/mnt/hf_cache" \
+        --bind "$(pwd):/workspace/.cd" \
+        --bind "$LOG_DIR:/var/log/habana_logs" \
+        --pwd /workspace/.cd \
+        --writable-tmpfs \
+        "$CONTAINER" \
+        python3 -m entrypoints.entrypoint_main server $EXTRA_ARGS \
+        > "$SCRIPT_DIR/logs/gaudi_${SERVER_NAME}_${SLURM_JOB_ID}.log" 2>&1 &
+
+    echo $!
+}
+
+# ========================================
+# Step 1: Start User Simulator Server
 # ========================================
 echo "=== Step 1: Starting User Simulator ==="
 
-USER_LOG="$SCRIPT_DIR/logs/gaudi_user_${SLURM_JOB_ID}.log"
-
-# Install tau-bench
-cd "$REPO_ROOT"
-pip install -q -e . 2>/dev/null || pip install -e .
-
-echo "Starting User vLLM server..."
-echo "Log file: $USER_LOG"
-
-# Start vLLM with Gaudi device
-# Key flags for Gaudi: --device hpu, --block-size 128
-vllm serve $USER_MODEL \
-    --device hpu \
-    --host 0.0.0.0 \
-    --port $USER_PORT \
-    --block-size $BLOCK_SIZE \
-    --gpu-memory-utilization 0.90 \
-    --max-model-len $MAX_MODEL_LEN \
-    --trust-remote-code \
-    --disable-log-requests \
-    > "$USER_LOG" 2>&1 &
-
-USER_PID=$!
+USER_PID=$(start_vllm_server "$USER_MODEL" "$USER_PORT" "$WORK_DIR/user_logs" "user")
 echo "User server PID: $USER_PID"
+echo ""
+
+# Wait a bit before starting second server
+sleep 30
 
 # ========================================
-# Step 2: Start Agent
+# Step 2: Start Agent Server
 # ========================================
-echo "=== Step 2: Starting Agent ==="
+echo "=== Step 2: Starting Agent Server ==="
 
-AGENT_LOG="$SCRIPT_DIR/logs/gaudi_agent_${SLURM_JOB_ID}.log"
-echo "Log file: $AGENT_LOG"
-
-# For tool-calling, enable auto tool choice
-vllm serve $AGENT_MODEL \
-    --device hpu \
-    --host 0.0.0.0 \
-    --port $AGENT_PORT \
-    --block-size $BLOCK_SIZE \
-    --gpu-memory-utilization 0.90 \
-    --max-model-len $MAX_MODEL_LEN \
-    --trust-remote-code \
-    --disable-log-requests \
-    --enable-auto-tool-choice \
-    --tool-call-parser hermes \
-    > "$AGENT_LOG" 2>&1 &
-
-AGENT_PID=$!
+# For tool-calling, we may need additional flags
+AGENT_PID=$(start_vllm_server "$AGENT_MODEL" "$AGENT_PORT" "$WORK_DIR/agent_logs" "agent")
 echo "Agent server PID: $AGENT_PID"
 echo ""
 
@@ -219,40 +221,54 @@ check_server() {
 # Wait for User Simulator
 echo -n "Waiting for User Simulator (port $USER_PORT)..."
 USER_READY=0
-for i in {1..60}; do
+for i in {1..90}; do
     if check_server "$USER_PORT"; then
         USER_READY=1
         echo " Ready! (${i}0s)"
         break
+    fi
+    # Check if process is still running
+    if ! kill -0 $USER_PID 2>/dev/null; then
+        echo " FAILED! (process died)"
+        echo "Last 100 lines of user server log:"
+        tail -100 "$SCRIPT_DIR/logs/gaudi_user_${SLURM_JOB_ID}.log"
+        exit 1
     fi
     echo -n "."
     sleep 10
 done
 
 if [ $USER_READY -eq 0 ]; then
-    echo " FAILED!"
-    echo "User Simulator did not start. Last 50 lines of log:"
-    tail -50 "$USER_LOG"
+    echo " TIMEOUT!"
+    echo "User Simulator did not start. Last 100 lines of log:"
+    tail -100 "$SCRIPT_DIR/logs/gaudi_user_${SLURM_JOB_ID}.log"
     exit 1
 fi
 
 # Wait for Agent
 echo -n "Waiting for Agent (port $AGENT_PORT)..."
 AGENT_READY=0
-for i in {1..60}; do
+for i in {1..90}; do
     if check_server "$AGENT_PORT"; then
         AGENT_READY=1
         echo " Ready! (${i}0s)"
         break
+    fi
+    # Check if process is still running
+    if ! kill -0 $AGENT_PID 2>/dev/null; then
+        echo " FAILED! (process died)"
+        echo "Last 100 lines of agent server log:"
+        tail -100 "$SCRIPT_DIR/logs/gaudi_agent_${SLURM_JOB_ID}.log"
+        exit 1
     fi
     echo -n "."
     sleep 10
 done
 
 if [ $AGENT_READY -eq 0 ]; then
-    echo " FAILED!"
-    echo "Agent did not start. Last 50 lines of log:"
-    tail -50 "$AGENT_LOG"
+    echo " TIMEOUT!"
+    echo "Agent did not start. Last 100 lines of log:"
+    tail -100 "$SCRIPT_DIR/logs/gaudi_agent_${SLURM_JOB_ID}.log"
     exit 1
 fi
 
@@ -260,14 +276,40 @@ echo ""
 echo "Both servers are ready!"
 echo ""
 
-# ========================================
-# Step 4: Run Experiments
-# ========================================
-echo "=== Step 4: Running Experiments ==="
+# Test the servers
+echo "=== Testing Servers ==="
+echo "User server models:"
+curl -s "http://localhost:$USER_PORT/v1/models" | head -20
+echo ""
+echo "Agent server models:"
+curl -s "http://localhost:$AGENT_PORT/v1/models" | head -20
+echo ""
 
-export OPENAI_API_KEY="dummy"
+# ========================================
+# Step 4: Install tau-bench
+# ========================================
+echo "=== Step 4: Installing tau-bench ==="
+
+# Load mamba and activate tau-bench environment
+module load mamba/latest
+source activate tau-bench 2>/dev/null || {
+    echo "Creating tau-bench environment..."
+    mamba create -n tau-bench -c conda-forge python=3.11 -y
+    source activate tau-bench
+    cd "$REPO_ROOT"
+    pip install -e .
+}
 
 cd "$REPO_ROOT"
+pip install -q -e . 2>/dev/null || pip install -e .
+echo ""
+
+# ========================================
+# Step 5: Run Experiments
+# ========================================
+echo "=== Step 5: Running Experiments ==="
+
+export OPENAI_API_KEY="dummy"
 
 echo "Working directory: $(pwd)"
 echo ""
@@ -296,7 +338,7 @@ for ENV in retail airline; do
             --user-model-provider openai \
             --user-model-base-url http://localhost:${USER_PORT}/v1 \
             --log-dir ${LOG_DIR} \
-            --max-concurrency 3 \
+            --max-concurrency 2 \
             --num-trials 1 \
             --end-index 3 \
             --shuffle 0"
