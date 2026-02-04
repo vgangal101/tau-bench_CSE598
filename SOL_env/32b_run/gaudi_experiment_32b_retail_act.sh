@@ -3,9 +3,7 @@
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
-#SBATCH --nodes=2
-#SBATCH --ntasks=2
-#SBATCH --ntasks-per-node=1
+#SBATCH --nodes=1
 #SBATCH --gres=gpu:hl225:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
@@ -14,16 +12,16 @@
 #SBATCH --error=tau-gaudi-32b-retail-act_%j.err
 
 # ========================================
-# Gaudi 32B Retail Act Experiment (Multi-Node)
+# Gaudi 32B Retail Act Experiment (Single Node)
 # ========================================
 # Configuration:
-#   - Nodes: 2 (User 32B on Node 1, Agent 32B on Node 2)
-#   - HPUs: 1 x HL-225 per node (Gaudi2)
-#   - Model: Qwen3-32B
+#   - Nodes: 1
+#   - HPUs: 1 x HL-225 (Gaudi2, 96GB HBM)
+#   - Model: Qwen3-32B (same for user and agent)
 #   - Environment: retail
 #   - Strategy: act
 #   - Trials: 5
-#   - Max Concurrency: 5
+#   - Max Concurrency: 2
 # ========================================
 
 set -e
@@ -40,47 +38,31 @@ exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act_${SLURM_JOB_ID}.out")
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act_${SLURM_JOB_ID}.err" >&2)
 
 echo "========================================"
-echo "=== Gaudi 32B Retail Act (Multi-Node) ==="
+echo "=== Gaudi 32B Retail Act (Single Node) ==="
 echo "========================================"
 echo "Started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
+echo "Node: $(hostname)"
 echo "Script directory: $SCRIPT_DIR"
 echo "Repository root: $REPO_ROOT"
 echo ""
 
 # ========================================
-# Get Node Hostnames
+# Check Gaudi Hardware
 # ========================================
-echo "=== Node Information ==="
-echo "SLURM_JOB_NODELIST: $SLURM_JOB_NODELIST"
-echo "SLURM_NNODES: $SLURM_NNODES"
-
-# Get list of nodes as an array
-NODES=($(scontrol show hostnames $SLURM_JOB_NODELIST))
-USER_NODE=${NODES[0]}
-AGENT_NODE=${NODES[1]}
-
-echo "User Simulator Node: $USER_NODE"
-echo "Agent Model Node: $AGENT_NODE"
-echo ""
-
-# Define ports
-USER_PORT=8000
-AGENT_PORT=8000  # Same port since different nodes
-
-# URLs for cross-node communication
-USER_URL="http://${USER_NODE}:${USER_PORT}"
-AGENT_URL="http://${AGENT_NODE}:${AGENT_PORT}"
-
-echo "User URL: $USER_URL"
-echo "Agent URL: $AGENT_URL"
+echo "=== Checking Gaudi Hardware ==="
+hl-smi || echo "hl-smi not available yet"
 echo ""
 
 # ========================================
-# Environment Setup
+# Environment Setup - Cache Redirects
 # ========================================
 echo "=== Setting up Cache Directories ==="
 
+# Source cache redirects from SOL's gaudi scripts
+source /data/sse/gaudi/scripts/cache-redirects.sh /scratch/$USER
+
+# Additional cache directories
 export APPTAINER_CACHEDIR="/scratch/$USER/apptainer_cache"
 export APPTAINER_TMPDIR="/scratch/$USER/apptainer_tmp"
 export HF_HOME="/scratch/$USER/hf_cache"
@@ -88,28 +70,34 @@ export HF_HOME="/scratch/$USER/hf_cache"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
 echo "HF_HOME=$HF_HOME"
+echo "APPTAINER_CACHEDIR=$APPTAINER_CACHEDIR"
 echo ""
 
 # ========================================
 # Model Configuration
 # ========================================
-USER_MODEL="Qwen/Qwen3-32B"
-AGENT_MODEL="Qwen/Qwen3-32B"
+# Using Qwen3-32B - fits on single 96GB HPU with limited context
+MODEL="Qwen/Qwen3-32B"
 
-# Context length - 32B on single HPU (96GB) can handle ~16K
-MAX_MODEL_LEN=16384
-MAX_NUM_SEQS=8
+# Port for vLLM server
+PORT=8000
+
+# Context length - 32B model (~64GB) leaves ~32GB for KV cache
+# Conservative setting to avoid OOM
+MAX_MODEL_LEN=8192
+MAX_NUM_SEQS=4
 
 # Experiment settings
 ENV="retail"
 STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=5
+MAX_CONCURRENCY=2
 
 echo "=== Configuration ==="
-echo "User Model: $USER_MODEL (on $USER_NODE)"
-echo "Agent Model: $AGENT_MODEL (on $AGENT_NODE)"
+echo "Model: $MODEL"
 echo "Max Model Length: $MAX_MODEL_LEN"
+echo "Max Num Seqs: $MAX_NUM_SEQS"
+echo "Port: $PORT"
 echo "Environment: $ENV"
 echo "Strategy: $STRATEGY"
 echo "Trials: $NUM_TRIALS"
@@ -126,13 +114,24 @@ VLLM_CD="$GAUDI_BASE/vllm-fork/.cd"
 echo "=== Gaudi Paths ==="
 echo "Container: $CONTAINER"
 echo "vLLM .cd dir: $VLLM_CD"
+
+if [ ! -f "$CONTAINER" ]; then
+    echo "ERROR: Container not found at $CONTAINER"
+    ls -la "$GAUDI_BASE/containers/" 2>/dev/null || echo "Cannot list containers directory"
+    exit 1
+fi
+
+if [ ! -d "$VLLM_CD" ]; then
+    echo "ERROR: vLLM .cd directory not found at $VLLM_CD"
+    exit 1
+fi
 echo ""
 
 # ========================================
 # Create Working Directories
 # ========================================
 WORK_DIR="/scratch/$USER/gaudi_tau_bench_${SLURM_JOB_ID}"
-mkdir -p "$WORK_DIR/user_logs" "$WORK_DIR/agent_logs"
+mkdir -p "$WORK_DIR/logs"
 
 echo "Working directory: $WORK_DIR"
 echo ""
@@ -143,192 +142,132 @@ echo ""
 cleanup() {
     echo ""
     echo "=== Cleaning up ==="
-    # Kill vLLM on both nodes
-    srun --nodes=1 --ntasks=1 -w $USER_NODE pkill -f "vllm serve" 2>/dev/null || true
-    srun --nodes=1 --ntasks=1 -w $AGENT_NODE pkill -f "vllm serve" 2>/dev/null || true
+    pkill -f "vllm serve" 2>/dev/null || true
+    fuser -k $PORT/tcp 2>/dev/null || true
     echo "Cleanup complete"
 }
 
 trap cleanup EXIT INT TERM
 
 # ========================================
-# Step 1: Start User Simulator on Node 1
+# Step 1: Start vLLM Server via Apptainer
 # ========================================
-echo "=== Step 1: Starting User Simulator (32B) on $USER_NODE ==="
+echo "=== Step 1: Starting vLLM Server ==="
 
-USER_LOG="$SCRIPT_DIR/logs/gaudi_user_32b_${SLURM_JOB_ID}.log"
+SERVER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_32b_${SLURM_JOB_ID}.log"
 
-srun --nodes=1 --ntasks=1 -w $USER_NODE bash -c "
-    # Source cache redirects
-    source /data/sse/gaudi/scripts/cache-redirects.sh /scratch/\$USER 2>/dev/null || true
+echo "Starting vLLM server..."
+echo "  Model: $MODEL"
+echo "  Port: $PORT"
+echo "  Log: $SERVER_LOG"
 
-    export APPTAINER_CACHEDIR='/scratch/\$USER/apptainer_cache'
-    export APPTAINER_TMPDIR='/scratch/\$USER/apptainer_tmp'
-    export HF_HOME='/scratch/\$USER/hf_cache'
-    export HABANA_VISIBLE_DEVICES=all
-    export PT_HPU_LAZY_MODE=0
-    export PT_HPU_ENABLE_LAZY_COLLECTIVES=True
-    export VLLM_SKIP_WARMUP=True
+# Set environment variables
+export APPTAINERENV_MODEL="$MODEL"
+export APPTAINERENV_HF_HOME=/mnt/hf_cache
+export APPTAINERENV_HABANA_VISIBLE_DEVICES=all
+export APPTAINERENV_PT_HPU_LAZY_MODE=0
+export APPTAINERENV_PT_HPU_ENABLE_LAZY_COLLECTIVES=True
+export APPTAINERENV_VLLM_SKIP_WARMUP=True
+export APPTAINERENV_VLLM_DELAYED_SAMPLING=True
+export APPTAINERENV_PYTHONUNBUFFERED=1
 
-    mkdir -p \$HF_HOME $WORK_DIR/user_logs
+# Bucketing configuration
+export APPTAINERENV_VLLM_PROMPT_BS_BUCKET_MIN=1
+export APPTAINERENV_VLLM_PROMPT_BS_BUCKET_STEP=32
+export APPTAINERENV_VLLM_DECODE_BS_BUCKET_MIN=1
+export APPTAINERENV_VLLM_DECODE_BS_BUCKET_STEP=32
+export APPTAINERENV_VLLM_PROMPT_SEQ_BUCKET_MIN=128
+export APPTAINERENV_VLLM_PROMPT_SEQ_BUCKET_STEP=256
+export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_MIN=128
+export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_STEP=256
 
-    echo 'Starting User Simulator (32B) on '\$(hostname)'...'
-    echo 'Log file: $USER_LOG'
+# Run the container with vllm serve
+cd "$VLLM_CD"
+mkdir -p "$WORK_DIR/logs"
 
-    cd $VLLM_CD
+apptainer exec \
+    --bind /usr/lib64:/host-lib64 \
+    --bind /usr/lib/habanalabs:/usr/lib/habanalabs \
+    --bind /opt/habanalabs:/opt/habanalabs \
+    --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl \
+    --bind "$HF_HOME:/mnt/hf_cache" \
+    --bind "$(pwd):/workspace/.cd" \
+    --bind "$WORK_DIR/logs:/var/log/habana_logs" \
+    --pwd /workspace/.cd \
+    --writable-tmpfs \
+    "$CONTAINER" \
+    vllm serve "$MODEL" \
+        --host 0.0.0.0 \
+        --port $PORT \
+        --block-size 128 \
+        --dtype bfloat16 \
+        --tensor-parallel-size 1 \
+        --download-dir /mnt/hf_cache \
+        --max-model-len $MAX_MODEL_LEN \
+        --gpu-memory-utilization 0.95 \
+        --use-padding-aware-scheduling \
+        --max-num-seqs $MAX_NUM_SEQS \
+        --max-num-prefill-seqs 2 \
+        --num-scheduler-steps 1 \
+        --disable-log-requests \
+        --enable-auto-tool-choice \
+        --tool-call-parser hermes \
+    > "$SERVER_LOG" 2>&1 &
 
-    apptainer exec \\
-        --bind /usr/lib64:/host-lib64 \\
-        --bind /usr/lib/habanalabs:/usr/lib/habanalabs \\
-        --bind /opt/habanalabs:/opt/habanalabs \\
-        --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl \\
-        --bind \$HF_HOME:/mnt/hf_cache \\
-        --bind \$(pwd):/workspace/.cd \\
-        --bind $WORK_DIR/user_logs:/var/log/habana_logs \\
-        --pwd /workspace/.cd \\
-        --writable-tmpfs \\
-        $CONTAINER \\
-        vllm serve $USER_MODEL \\
-            --host 0.0.0.0 \\
-            --port $USER_PORT \\
-            --block-size 128 \\
-            --dtype bfloat16 \\
-            --tensor-parallel-size 1 \\
-            --download-dir /mnt/hf_cache \\
-            --max-model-len $MAX_MODEL_LEN \\
-            --gpu-memory-utilization 0.90 \\
-            --use-padding-aware-scheduling \\
-            --max-num-seqs $MAX_NUM_SEQS \\
-            --max-num-prefill-seqs 4 \\
-            --num-scheduler-steps 1 \\
-            --disable-log-requests
-" > "$USER_LOG" 2>&1 &
-
-USER_SRUN_PID=$!
-echo "User srun PID: $USER_SRUN_PID"
-echo "User log: $USER_LOG"
-
-# Small delay
-sleep 5
-
-# ========================================
-# Step 2: Start Agent on Node 2
-# ========================================
-echo "=== Step 2: Starting Agent (32B) on $AGENT_NODE ==="
-
-AGENT_LOG="$SCRIPT_DIR/logs/gaudi_agent_32b_${SLURM_JOB_ID}.log"
-
-srun --nodes=1 --ntasks=1 -w $AGENT_NODE bash -c "
-    # Source cache redirects
-    source /data/sse/gaudi/scripts/cache-redirects.sh /scratch/\$USER 2>/dev/null || true
-
-    export APPTAINER_CACHEDIR='/scratch/\$USER/apptainer_cache'
-    export APPTAINER_TMPDIR='/scratch/\$USER/apptainer_tmp'
-    export HF_HOME='/scratch/\$USER/hf_cache'
-    export HABANA_VISIBLE_DEVICES=all
-    export PT_HPU_LAZY_MODE=0
-    export PT_HPU_ENABLE_LAZY_COLLECTIVES=True
-    export VLLM_SKIP_WARMUP=True
-
-    mkdir -p \$HF_HOME $WORK_DIR/agent_logs
-
-    echo 'Starting Agent (32B) on '\$(hostname)'...'
-    echo 'Log file: $AGENT_LOG'
-
-    cd $VLLM_CD
-
-    apptainer exec \\
-        --bind /usr/lib64:/host-lib64 \\
-        --bind /usr/lib/habanalabs:/usr/lib/habanalabs \\
-        --bind /opt/habanalabs:/opt/habanalabs \\
-        --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl \\
-        --bind \$HF_HOME:/mnt/hf_cache \\
-        --bind \$(pwd):/workspace/.cd \\
-        --bind $WORK_DIR/agent_logs:/var/log/habana_logs \\
-        --pwd /workspace/.cd \\
-        --writable-tmpfs \\
-        $CONTAINER \\
-        vllm serve $AGENT_MODEL \\
-            --host 0.0.0.0 \\
-            --port $AGENT_PORT \\
-            --block-size 128 \\
-            --dtype bfloat16 \\
-            --tensor-parallel-size 1 \\
-            --download-dir /mnt/hf_cache \\
-            --max-model-len $MAX_MODEL_LEN \\
-            --gpu-memory-utilization 0.90 \\
-            --use-padding-aware-scheduling \\
-            --max-num-seqs $MAX_NUM_SEQS \\
-            --max-num-prefill-seqs 4 \\
-            --num-scheduler-steps 1 \\
-            --disable-log-requests \\
-            --enable-auto-tool-choice \\
-            --tool-call-parser hermes
-" > "$AGENT_LOG" 2>&1 &
-
-AGENT_SRUN_PID=$!
-echo "Agent srun PID: $AGENT_SRUN_PID"
-echo "Agent log: $AGENT_LOG"
+SERVER_PID=$!
+echo "vLLM server PID: $SERVER_PID"
 echo ""
 
 # ========================================
-# Step 3: Wait for Servers to be Ready
+# Step 2: Wait for Server to be Ready
 # ========================================
-echo "=== Step 3: Waiting for servers to be ready ==="
+echo "=== Step 2: Waiting for server to be ready ==="
 
 check_server() {
-    curl -s --connect-timeout 5 "${1}/health" > /dev/null 2>&1
+    curl -s --connect-timeout 5 "http://localhost:${1}/health" > /dev/null 2>&1
     return $?
 }
 
-# Wait for User Simulator
-echo -n "Waiting for User Simulator (${USER_URL})..."
-USER_READY=0
-for i in {1..120}; do
-    if check_server "$USER_URL"; then
-        USER_READY=1
+echo -n "Waiting for vLLM server (port $PORT)..."
+SERVER_READY=0
+for i in {1..180}; do  # 30 min timeout for 32B model download/load
+    if check_server "$PORT"; then
+        SERVER_READY=1
         echo " Ready! (${i}0s)"
         break
+    fi
+    # Check if process is still running
+    if ! kill -0 $SERVER_PID 2>/dev/null; then
+        echo " FAILED! (process died)"
+        echo "Last 100 lines of server log:"
+        tail -100 "$SERVER_LOG"
+        exit 1
     fi
     echo -n "."
     sleep 10
 done
 
-if [ $USER_READY -eq 0 ]; then
-    echo " FAILED!"
-    echo "User Simulator did not start. Last 50 lines of log:"
-    tail -50 "$USER_LOG"
-    exit 1
-fi
-
-# Wait for Agent
-echo -n "Waiting for Agent (${AGENT_URL})..."
-AGENT_READY=0
-for i in {1..120}; do
-    if check_server "$AGENT_URL"; then
-        AGENT_READY=1
-        echo " Ready! (${i}0s)"
-        break
-    fi
-    echo -n "."
-    sleep 10
-done
-
-if [ $AGENT_READY -eq 0 ]; then
-    echo " FAILED!"
-    echo "Agent did not start. Last 50 lines of log:"
-    tail -50 "$AGENT_LOG"
+if [ $SERVER_READY -eq 0 ]; then
+    echo " TIMEOUT!"
+    echo "vLLM server did not start. Last 100 lines of log:"
+    tail -100 "$SERVER_LOG"
     exit 1
 fi
 
 echo ""
-echo "Both servers are ready!"
+echo "Server is ready!"
+echo ""
+
+# Test the server
+echo "=== Testing Server ==="
+echo "Available models:"
+curl -s "http://localhost:$PORT/v1/models" | head -20
 echo ""
 
 # ========================================
-# Step 4: Install tau-bench and Run Experiment
+# Step 3: Install tau-bench
 # ========================================
-echo "=== Step 4: Running Experiment ==="
+echo "=== Step 3: Installing tau-bench ==="
 
 # Load mamba and activate tau-bench environment
 module load mamba/latest
@@ -342,17 +281,23 @@ source activate tau-bench 2>/dev/null || {
 
 cd "$REPO_ROOT"
 pip install -q -e . 2>/dev/null || pip install -e .
+echo ""
+
+# ========================================
+# Step 4: Run Experiment
+# ========================================
+echo "=== Step 4: Running Experiment ==="
 
 export OPENAI_API_KEY="dummy"
 
 echo "Working directory: $(pwd)"
-echo "User URL: $USER_URL"
-echo "Agent URL: $AGENT_URL"
 echo ""
 
 # Results directory
 LOG_DIR="$SCRIPT_DIR/results_gaudi/${ENV}/${STRATEGY}"
 mkdir -p "$LOG_DIR"
+
+SERVER_URL="http://localhost:${PORT}/v1"
 
 echo ">>> Running Environment: $ENV, Strategy: $STRATEGY"
 echo "    Trials: $NUM_TRIALS"
@@ -362,12 +307,12 @@ echo ""
 CMD="python run.py \
     --env ${ENV} \
     --agent-strategy ${STRATEGY} \
-    --model ${AGENT_MODEL} \
+    --model ${MODEL} \
     --model-provider openai \
-    --model-base-url ${AGENT_URL}/v1 \
-    --user-model ${USER_MODEL} \
+    --model-base-url ${SERVER_URL} \
+    --user-model ${MODEL} \
     --user-model-provider openai \
-    --user-model-base-url ${USER_URL}/v1 \
+    --user-model-base-url ${SERVER_URL} \
     --log-dir ${LOG_DIR} \
     --max-concurrency ${MAX_CONCURRENCY} \
     --num-trials ${NUM_TRIALS}"
@@ -390,8 +335,7 @@ echo "=== Experiment Summary ==="
 echo "========================================"
 echo "Environment: $ENV"
 echo "Strategy: $STRATEGY"
-echo "User Model: $USER_MODEL"
-echo "Agent Model: $AGENT_MODEL"
+echo "Model: $MODEL"
 echo "Trials: $NUM_TRIALS"
 echo ""
 echo "Results saved to: $LOG_DIR"
