@@ -4,9 +4,9 @@
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:hl225:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --gres=gpu:hl225:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --time=06:00:00
 #SBATCH --output=32b-airline-tc-tau-gaudi_%j.out
 #SBATCH --error=32b-airline-tc-tau-gaudi_%j.err
@@ -65,7 +65,7 @@ export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_MIN=128
 export APPTAINERENV_VLLM_DECODE_BLOCK_BUCKET_STEP=256
 
 cd "$VLLM_CD"
-apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$MODEL" --host 0.0.0.0 --port $PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.95 --use-padding-aware-scheduling --max-num-seqs $MAX_NUM_SEQS --max-num-prefill-seqs 2 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$SERVER_LOG" 2>&1 &
+apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$MODEL" --host 0.0.0.0 --port $PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 2 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.95 --use-padding-aware-scheduling --max-num-seqs $MAX_NUM_SEQS --max-num-prefill-seqs 2 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$SERVER_LOG" 2>&1 &
 
 SERVER_PID=$!
 echo "vLLM server PID: $SERVER_PID"

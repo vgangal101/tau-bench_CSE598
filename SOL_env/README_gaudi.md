@@ -113,16 +113,15 @@ gaudi_experiment_{MODEL_SIZE}_{ENVIRONMENT}_{STRATEGY}.sh
 | Time Limit | 6 hours |
 | Partition | gaudi |
 | QOS | class_gaudi |
-| HPU | 1 x HL-225 (96GB HBM) |
 
 ### Model-Specific Settings
 
-| Model | Memory | MAX_NUM_SEQS | GPU Util |
-|-------|--------|--------------|----------|
-| Qwen3-4B | 32G | 16 | 0.90 |
-| Qwen3-8B | 32G | 16 | 0.90 |
-| Qwen3-14B | 48G | 12 | 0.90 |
-| Qwen3-32B | 64G | 8 | 0.95 |
+| Model | HPUs | CPU Mem | MAX_NUM_SEQS | GPU Util | Tensor Parallel |
+|-------|------|---------|--------------|----------|-----------------|
+| Qwen3-4B | 1 | 32G | 16 | 0.90 | 1 |
+| Qwen3-8B | 1 | 32G | 16 | 0.90 | 1 |
+| Qwen3-14B | 1 | 48G | 12 | 0.90 | 1 |
+| Qwen3-32B | 2 | 128G | 8 | 0.95 | 2 |
 
 ### Port Assignments (to avoid conflicts)
 

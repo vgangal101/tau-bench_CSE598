@@ -4,9 +4,9 @@
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:hl225:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --gres=gpu:hl225:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --time=06:00:00
 #SBATCH --output=32b-airline-act-tau-gaudi_%j.out
 #SBATCH --error=32b-airline-act-tau-gaudi_%j.err
@@ -16,7 +16,7 @@
 # ========================================
 # Configuration:
 #   - Nodes: 1
-#   - HPUs: 1 x HL-225 (Gaudi2, 96GB HBM)
+#   - HPUs: 2 x HL-225 (Gaudi2, 96GB HBM each = 192GB total)
 #   - Model: Qwen3-32B (same for user and agent)
 #   - Environment: airline
 #   - Strategy: act
@@ -76,7 +76,7 @@ echo ""
 # ========================================
 # Model Configuration
 # ========================================
-# Using Qwen3-32B - fits on single 96GB HPU with limited context
+# Using Qwen3-32B - with 2 HPUs (192GB total) for better memory headroom
 MODEL="Qwen/Qwen3-32B"
 
 # Port for vLLM server (32B airline uses 8103 to avoid conflicts)
@@ -200,7 +200,7 @@ apptainer exec \
         --port $PORT \
         --block-size 128 \
         --dtype bfloat16 \
-        --tensor-parallel-size 1 \
+        --tensor-parallel-size 2 \
         --download-dir /mnt/hf_cache \
         --max-model-len $MAX_MODEL_LEN \
         --gpu-memory-utilization 0.95 \
