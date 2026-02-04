@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:2
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --time=06:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=32b-retail-act-tau-gaudi_%j.out
 #SBATCH --error=32b-retail-act-tau-gaudi_%j.err
 #SBATCH --exclusive
@@ -84,15 +84,15 @@ MODEL="Qwen/Qwen3-32B"
 PORT=8003
 
 # Context length - With 2 HPUs (192GB total), 32B model fits easily
-# Match regular A100 scripts: 32768 tokens
-MAX_MODEL_LEN=32768
+# Qwen3 supports up to 40960 max_position_embeddings
+MAX_MODEL_LEN=40000
 MAX_NUM_SEQS=8
 
 # Experiment settings
 ENV="retail"
 STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=3
+MAX_CONCURRENCY=2
 
 echo "=== Configuration ==="
 echo "Model: $MODEL"

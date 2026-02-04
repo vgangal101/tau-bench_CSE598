@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:3
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=160G
-#SBATCH --time=06:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=4b-retail-react-tau-gaudi_%j.out
 #SBATCH --error=4b-retail-react-tau-gaudi_%j.err
 #SBATCH --exclusive
@@ -33,11 +33,11 @@ USER_MODEL="Qwen/Qwen3-32B"
 AGENT_MODEL="Qwen/Qwen3-4B"
 USER_PORT=8200
 AGENT_PORT=8000
-MAX_MODEL_LEN=32768
+MAX_MODEL_LEN=40000
 ENV="retail"
 STRATEGY="react"
 NUM_TRIALS=5
-MAX_CONCURRENCY=3
+MAX_CONCURRENCY=2
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
@@ -68,13 +68,13 @@ cd "$VLLM_CD"
 echo "=== Starting User Model Server (32B) ==="
 USER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_user_32b_${SLURM_JOB_ID}.log"
 export APPTAINERENV_HABANA_VISIBLE_DEVICES=0,1
-apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$USER_MODEL" --host 0.0.0.0 --port $USER_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 2 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.95 --use-padding-aware-scheduling --max-num-seqs 8 --max-num-prefill-seqs 2 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$USER_LOG" 2>&1 &
+apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$USER_MODEL" --host 0.0.0.0 --port $USER_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 2 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.90 --use-padding-aware-scheduling --max-num-seqs 6 --max-num-prefill-seqs 2 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$USER_LOG" 2>&1 &
 USER_PID=$!
 
 echo "=== Starting Agent Model Server (4B) ==="
 AGENT_LOG="$SCRIPT_DIR/logs/gaudi_vllm_agent_4b_${SLURM_JOB_ID}.log"
 export APPTAINERENV_HABANA_VISIBLE_DEVICES=2
-apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.90 --use-padding-aware-scheduling --max-num-seqs 16 --max-num-prefill-seqs 8 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$AGENT_LOG" 2>&1 &
+apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 12 --max-num-prefill-seqs 8 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes > "$AGENT_LOG" 2>&1 &
 AGENT_PID=$!
 
 check_server() { curl -s --connect-timeout 5 "http://localhost:${1}/health" > /dev/null 2>&1; return $?; }

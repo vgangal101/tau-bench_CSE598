@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:3
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=160G
-#SBATCH --time=06:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=14b-airline-act-tau-gaudi_%j.out
 #SBATCH --error=14b-airline-act-tau-gaudi_%j.err
 #SBATCH --exclusive
@@ -33,11 +33,11 @@ USER_MODEL="Qwen/Qwen3-32B"
 AGENT_MODEL="Qwen/Qwen3-14B"
 USER_PORT=8302
 AGENT_PORT=8102
-MAX_MODEL_LEN=32768
+MAX_MODEL_LEN=40000
 ENV="airline"
 STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=3
+MAX_CONCURRENCY=2
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
