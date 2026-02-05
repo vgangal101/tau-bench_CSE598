@@ -107,10 +107,10 @@ gaudi_experiment_{MODEL_SIZE}_{ENVIRONMENT}_{STRATEGY}.sh
 
 | Setting | Value |
 |---------|-------|
-| MAX_MODEL_LEN | 32768 |
-| MAX_CONCURRENCY | 3 |
+| MAX_MODEL_LEN | 40000 |
+| MAX_CONCURRENCY | 2 |
 | NUM_TRIALS | 5 |
-| Time Limit | 6 hours |
+| Time Limit | 10 hours |
 | Partition | gaudi |
 | QOS | class_gaudi |
 
@@ -127,20 +127,37 @@ All experiments use a **consistent 32B user simulator** (Qwen3-32B) to ensure fa
 
 | Agent Model | Total HPUs | CPUs | Memory | Architecture |
 |-------------|------------|------|--------|--------------|
-| Qwen3-4B | 3 | 24 | 160G | 32B (TP=2) + 4B (TP=1) |
-| Qwen3-8B | 3 | 24 | 160G | 32B (TP=2) + 8B (TP=1) |
-| Qwen3-14B | 3 | 24 | 160G | 32B (TP=2) + 14B (TP=1) |
-| Qwen3-32B | 2 | 16 | 128G | Single 32B (TP=2) |
+| Qwen3-4B | 3 | 24 | 160G | 32B (TP=2, HPU 0,1) + 4B (TP=1, HPU 2) |
+| Qwen3-8B | 3 | 24 | 160G | 32B (TP=2, HPU 0,1) + 8B (TP=1, HPU 2) |
+| Qwen3-14B | 3 | 24 | 160G | 32B (TP=2, HPU 0,1) + 14B (TP=1, HPU 2) |
+| Qwen3-32B | 4 | 32 | 200G | 32B (TP=2, HPU 0,1) + 32B (TP=2, HPU 2,3) |
 
 ### Server Configuration Details
 
-| Server | MAX_NUM_SEQS | MAX_PREFILL | GPU Util |
-|--------|--------------|-------------|----------|
-| User (32B) | 8 | 2 | 0.95 |
-| Agent (4B) | 16 | 8 | 0.90 |
-| Agent (8B) | 16 | 8 | 0.90 |
-| Agent (14B) | 12 | 6 | 0.90 |
-| Agent (32B) | 8 | 2 | 0.95 |
+| Server | MAX_NUM_SEQS | MAX_PREFILL | GPU Util | Notes |
+|--------|--------------|-------------|----------|-------|
+| User (32B) | 4 | 1 | 0.90 | Stability-optimized for long runs |
+| Agent (4B) | 16 | 8 | 0.85 | |
+| Agent (8B) | 16 | 8 | 0.90 | |
+| Agent (14B) | 12 | 6 | 0.90 | |
+| Agent (32B) | 4 | 1 | 0.90 | Same as User (dual 32B servers) |
+
+### Stability Settings Rationale
+
+The User server (32B) settings were optimized for long-running experiments (115 retail tasks × 5 trials = 575 runs):
+
+| Setting | Value | Reason |
+|---------|-------|--------|
+| `--gpu-memory-utilization` | 0.90 | Prevents OOM during extended runs (was 0.95) |
+| `--max-num-seqs` | 4 | Only need 2× MAX_CONCURRENCY headroom (was 6-8) |
+| `--max-num-prefill-seqs` | 1 | Reduces concurrent prefill memory pressure (was 2) |
+| `--max-model-len` | 40000 | Safe within Qwen3's 40960 max_position_embeddings |
+
+**Why these matter for retail experiments:**
+- Retail has 115 tasks vs airline's 50 tasks
+- With 5 trials each, that's 575 server requests over many hours
+- Memory fragmentation accumulates, causing "client has been closed" errors
+- Lower `max-num-seqs` drastically reduces KV cache memory requirements
 
 ### Port Assignments (to avoid conflicts)
 
@@ -151,9 +168,9 @@ Each script uses two ports for the dual-server setup:
 | 4B | 8200 | 8000 | 8300 | 8100 |
 | 8B | 8201 | 8001 | 8301 | 8101 |
 | 14B | 8202 | 8002 | 8302 | 8102 |
-| 32B | - | 8003 | - | 8103 |
+| 32B | 8200 | 8000 | 8300 | 8100 |
 
-Note: 32B scripts use a single server (same model for user and agent).
+Note: All experiments now use dual-server architecture with separate User and Agent vLLM servers.
 
 ## Results Location
 
@@ -181,8 +198,6 @@ Each job creates:
 - `gaudi_vllm_user_32b_{JOB_ID}.log` - User model (32B) vLLM server log
 - `gaudi_vllm_agent_{MODEL}_{JOB_ID}.log` - Agent model vLLM server log
 
-Note: 32B agent scripts have a single vLLM log since user and agent share the same server.
-
 ## Alternative: SOL's Hosted API
 
 SOL provides LLMs on Gaudi2 with an OpenAI-compatible API (no local setup needed).
@@ -209,12 +224,14 @@ bash SOL_env/gaudi_api_experiment.sh
 1. **Job Submission**: Script submitted to SLURM gaudi partition
 2. **Environment Setup**: Cache directories and Gaudi env vars configured
 3. **User Server Start**: Apptainer container launches vLLM with Qwen3-32B (TP=2 on HPUs 0,1)
-4. **Agent Server Start**: Second Apptainer container launches vLLM with agent model (TP=1 on HPU 2)
-5. **Health Check**: Waits for both servers (up to 30 min for 32B, 20 min for agent)
+4. **Agent Server Start**: Second Apptainer container launches vLLM with agent model
+   - 4B/8B/14B: TP=1 on HPU 2
+   - 32B: TP=2 on HPUs 2,3
+5. **Health Check**: Waits for both servers (up to 30 min for 32B user, 15-20 min for smaller agents)
 6. **tau-bench Run**: `python run.py` with `--user-model-base-url` and `--model-base-url` pointing to separate servers
 7. **Cleanup**: Both vLLM servers terminated
 
-Note: 32B agent scripts use a single server for both user and agent models.
+All experiments use dual-server architecture for isolation and stability.
 
 ## Script Robustness Features
 
@@ -328,6 +345,14 @@ rm -f ~/.conda/envs/tau-bench/lib/python3.11/site-packages/__editable__.tau_benc
 
 ### vLLM Server Killed Unexpectedly
 If your vLLM server dies shortly after starting (e.g., "Shutdown complete" after 30-60 seconds), check if another job on the same node ran a cleanup. The `--exclusive` flag prevents this.
+
+### "Cannot send a request, as the client has been closed" Error
+This error means the vLLM server crashed during the experiment. Common causes:
+1. **Memory pressure**: Reduce `--gpu-memory-utilization` or `--max-num-seqs`
+2. **Long-running fragmentation**: Server memory fragments over hundreds of requests
+3. **Context too long**: Some tasks exceed `--max-model-len`
+
+The current settings (gpu-mem 0.90, max-num-seqs 4) are tuned to prevent this.
 
 ### Jobs Interfering with Each Other
 If multiple jobs seem to affect each other:

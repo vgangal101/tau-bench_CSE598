@@ -439,3 +439,79 @@ hl-smi   # equivalent to nvidia-smi
 ```
 
 See `SOL_env/README_gaudi.md` for detailed setup instructions.
+
+#### Gaudi Experiment Scripts Structure
+
+```
+SOL_env/
+├── 4b_run/                              # 4B agent experiments (3 HPUs)
+│   ├── gaudi_experiment_4b_retail_*.sh  # retail: act, react, tool-calling
+│   └── gaudi_experiment_4b_airline_*.sh # airline: act, react, tool-calling
+├── 8b_run/                              # 8B agent experiments (3 HPUs)
+│   ├── gaudi_experiment_8b_retail_*.sh
+│   └── gaudi_experiment_8b_airline_*.sh
+├── 14b_run/                             # 14B agent experiments (3 HPUs)
+│   ├── gaudi_experiment_14b_retail_*.sh
+│   └── gaudi_experiment_14b_airline_*.sh
+└── 32b_run/                             # 32B agent experiments (4 HPUs, dual-server)
+    ├── gaudi_experiment_32b_retail_*.sh
+    └── gaudi_experiment_32b_airline_*.sh
+```
+
+#### Gaudi Experiment Configuration
+
+| Agent Size | HPUs | User Model | Agent Model | Architecture |
+|------------|------|------------|-------------|--------------|
+| 4B | 3 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-4B (TP=1, HPU 2) | Dual-server |
+| 8B | 3 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-8B (TP=1, HPU 2) | Dual-server |
+| 14B | 3 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-14B (TP=1, HPU 2) | Dual-server |
+| 32B | 4 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-32B (TP=2, HPU 2,3) | Dual-server |
+
+#### Standardized vLLM Settings (Stability-Optimized)
+
+All Gaudi scripts use these settings for the **User server (32B)**:
+
+```bash
+--gpu-memory-utilization 0.90 \
+--max-num-seqs 4 \
+--max-num-prefill-seqs 1 \
+--max-model-len 40000
+```
+
+**Rationale:**
+- `gpu-memory-utilization 0.90`: Prevents OOM during long runs (was 0.95)
+- `max-num-seqs 4`: Only need 2× MAX_CONCURRENCY for safety (was 6-8)
+- `max-num-prefill-seqs 1`: Reduces concurrent prefill memory pressure (was 2)
+- `max-model-len 40000`: Qwen3 supports up to 40960 (max_position_embeddings)
+
+#### Experiment Parameters
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| MAX_CONCURRENCY | 2 | Parallel task workers |
+| NUM_TRIALS | 5 | Trials per task |
+| MAX_MODEL_LEN | 40000 | Context window tokens |
+| Time Limit | 10 hours | SLURM wall time |
+| Environments | retail (115 tasks), airline (50 tasks) | |
+| Strategies | act, react, tool-calling | |
+
+#### Running Gaudi Experiments
+
+```bash
+# Submit a single experiment
+sbatch SOL_env/8b_run/gaudi_experiment_8b_retail_react.sh
+
+# Monitor running jobs
+squeue -u $USER
+
+# Check experiment logs
+tail -f SOL_env/8b_run/logs/tau-gaudi-8b-retail-react_<job_id>.out
+
+# Check vLLM server logs
+tail -f SOL_env/8b_run/logs/gaudi_vllm_user_32b_<job_id>.log
+tail -f SOL_env/8b_run/logs/gaudi_vllm_agent_8b_<job_id>.log
+```
+
+#### Results Location
+
+Results are saved to `SOL_env/{size}_run/results_gaudi/{env}/{strategy}/`
