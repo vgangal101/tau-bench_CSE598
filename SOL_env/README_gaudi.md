@@ -414,7 +414,6 @@ ls -la /data/sse/gaudi/
 |--------|---------|
 | `gaudi_api_experiment.sh` | Use SOL's hosted API |
 | `gaudi_setup_check.sh` | Diagnostic to verify environment |
-| `gaudi_env_setup.sh` | Environment setup helper |
 
 ## References
 

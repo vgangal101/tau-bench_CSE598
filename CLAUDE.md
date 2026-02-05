@@ -419,7 +419,7 @@ interactive -p gaudi -c 30 --mem=30G -G 3 -t 0-6
 |--------|---------|
 | `SOL_env/gaudi_api_experiment.sh` | Use SOL's hosted API (no local setup) |
 | `SOL_env/gaudi_experiment.sh` | Run local vLLM on Gaudi node |
-| `SOL_env/gaudi_setup_check.sh` | Diagnostic script |
+| `SOL_env/gaudi_setup_check.sh` | Diagnostic script (optional) |
 | `SOL_env/README_gaudi.md` | Full documentation |
 
 #### Key Differences from A100 Scripts
