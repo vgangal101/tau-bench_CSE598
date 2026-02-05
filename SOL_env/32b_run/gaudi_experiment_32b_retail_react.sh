@@ -131,6 +131,15 @@ for BATCH in "${BATCHES[@]}"; do
         --log-dir ${LOG_DIR} --max-concurrency ${MAX_CONCURRENCY} --num-trials ${NUM_TRIALS} \
         --start-index ${START_IDX} --end-index $((END_IDX + 1))
 
+    # Wait for vLLM to finish processing any queued requests
+    echo "Batch ${BATCH_NUM} execution complete, waiting for vLLM to finish processing..."
+    sleep 30
+
+    # Check if servers are still responsive
+    echo "Checking server status before cleanup..."
+    check_server "$USER_PORT" && echo "User server still responsive" || echo "User server not responding"
+    check_server "$AGENT_PORT" && echo "Agent server still responsive" || echo "Agent server not responding"
+
     # Rename output file to include batch info for clean merging
     LATEST=$(ls -t "$LOG_DIR"/*.json 2>/dev/null | grep -v "_batch" | grep -v "_merged" | head -1)
     if [ -n "$LATEST" ]; then
@@ -143,10 +152,13 @@ for BATCH in "${BATCHES[@]}"; do
 
     # Kill servers before next batch (cleanup clears memory fragmentation)
     echo "Stopping servers for memory cleanup..."
+    echo "Giving servers 5 seconds to finish any final requests..."
+    sleep 5
     cleanup
     USER_PID=""
     AGENT_PID=""
-    sleep 10  # Wait for ports to release and memory to clear
+    echo "Waiting 20 seconds for ports to release and memory to clear..."
+    sleep 20  # Increased wait time for proper cleanup
 done
 
 # Merge all batch results from this job
