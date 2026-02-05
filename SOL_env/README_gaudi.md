@@ -108,11 +108,43 @@ gaudi_experiment_{MODEL_SIZE}_{ENVIRONMENT}_{STRATEGY}.sh
 | Setting | Value |
 |---------|-------|
 | MAX_MODEL_LEN | 40000 |
-| MAX_CONCURRENCY | 2 |
+| MAX_CONCURRENCY | 4 |
 | NUM_TRIALS | 5 |
 | Time Limit | 10 hours |
 | Partition | gaudi |
 | QOS | class_gaudi |
+
+### Batched Execution
+
+To prevent vLLM memory fragmentation crashes during long-running experiments, all scripts use **batched execution with server restarts**:
+
+**Retail (115 tasks) - 3 batches:**
+- Batch 1: tasks 0-38 (39 tasks)
+- Batch 2: tasks 39-76 (38 tasks)
+- Batch 3: tasks 77-114 (38 tasks)
+
+**Airline (50 tasks) - 2 batches:**
+- Batch 1: tasks 0-24 (25 tasks)
+- Batch 2: tasks 25-49 (25 tasks)
+
+**How it works:**
+1. Servers start for batch 1
+2. Run experiment with `--start-index 0 --end-index 39`
+3. Save results with batch suffix
+4. Kill servers (clears GPU memory fragmentation)
+5. Wait 10 seconds for port release
+6. Repeat for remaining batches
+7. Merge all batch results into final JSON file
+
+**Benefits:**
+- `MAX_CONCURRENCY=4` (increased from 2) for faster execution
+- Server restarts clear memory fragmentation between batches
+- Each batch runs with fresh KV cache allocation
+- Results automatically merged at end of job
+
+**Output files:**
+- Batch files: `{strategy}-{model}-0.0_range_{start}-{end}_..._batch{N}_job{JOB_ID}.json`
+- Merged file: `{strategy}-{model}-0.0_range_0-{total}_job{JOB_ID}_merged.json`
 
 ### Dual-Server Architecture
 

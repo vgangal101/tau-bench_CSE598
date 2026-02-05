@@ -488,12 +488,24 @@ All Gaudi scripts use these settings for the **User server (32B)**:
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| MAX_CONCURRENCY | 2 | Parallel task workers |
+| MAX_CONCURRENCY | 4 | Parallel task workers |
 | NUM_TRIALS | 5 | Trials per task |
 | MAX_MODEL_LEN | 40000 | Context window tokens |
 | Time Limit | 10 hours | SLURM wall time |
 | Environments | retail (115 tasks), airline (50 tasks) | |
 | Strategies | act, react, tool-calling | |
+
+#### Batched Execution (Memory Stability)
+
+All scripts use batched execution with server restarts to prevent vLLM memory fragmentation:
+
+**Retail (115 tasks) - 3 batches:**
+- Batch 1: tasks 0-38, Batch 2: tasks 39-76, Batch 3: tasks 77-114
+
+**Airline (50 tasks) - 2 batches:**
+- Batch 1: tasks 0-24, Batch 2: tasks 25-49
+
+Between batches: servers killed, 10s wait, fresh restart. Results merged at job end.
 
 #### Running Gaudi Experiments
 
