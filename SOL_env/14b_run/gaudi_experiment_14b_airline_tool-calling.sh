@@ -212,11 +212,8 @@ for BATCH in "${BATCHES[@]}"; do
     cleanup
     USER_PID=""
     AGENT_PID=""
-    echo "Waiting 60 seconds for HPU devices to release and memory to clear..."
-    sleep 60  # Extended wait for Gaudi HPU device cleanup
-    # Verify HPU devices are free before next batch
-    echo "Checking HPU device status..."
-    hl-smi || echo "WARNING: hl-smi not available, continuing anyway"
+    # Poll for HPU device release instead of fixed sleep
+    wait_for_hpu_release
 done
 
 # Merge all batch results from this job

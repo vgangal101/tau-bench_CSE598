@@ -154,22 +154,26 @@ for BATCH in "${BATCHES[@]}"; do
     apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 16 --max-num-prefill-seqs 8 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
     AGENT_PID=$!
 
+    BATCH_SKIP=false
     echo -n "Waiting for User server (32B)..."
     for i in {1..180}; do
         if check_server "$USER_PORT"; then echo " Ready! (${i}0s)"; break; fi
-        if ! kill -0 $USER_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$USER_LOG"; exit 1; fi
+        if ! kill -0 $USER_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$USER_LOG"; BATCH_SKIP=true; break; fi
         echo -n "."; sleep 10
     done
-    if ! check_server "$USER_PORT"; then echo " TIMEOUT!"; tail -100 "$USER_LOG"; exit 1; fi
+    if [ "$BATCH_SKIP" = false ] && ! check_server "$USER_PORT"; then echo " TIMEOUT!"; tail -100 "$USER_LOG"; BATCH_SKIP=true; fi
 
+    if [ "$BATCH_SKIP" = false ]; then
     echo -n "Waiting for Agent server (4B)..."
     for i in {1..90}; do
         if check_server "$AGENT_PORT"; then echo " Ready! (${i}0s)"; break; fi
-        if ! kill -0 $AGENT_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$AGENT_LOG"; exit 1; fi
+        if ! kill -0 $AGENT_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$AGENT_LOG"; BATCH_SKIP=true; break; fi
         echo -n "."; sleep 10
     done
-    if ! check_server "$AGENT_PORT"; then echo " TIMEOUT!"; tail -100 "$AGENT_LOG"; exit 1; fi
+    if [ "$BATCH_SKIP" = false ] && ! check_server "$AGENT_PORT"; then echo " TIMEOUT!"; tail -100 "$AGENT_LOG"; BATCH_SKIP=true; fi
+    fi
 
+    if [ "$BATCH_SKIP" = false ]; then
     echo "Both servers ready!"
 
     cd "$REPO_ROOT"
@@ -197,6 +201,9 @@ for BATCH in "${BATCHES[@]}"; do
     fi
 
     echo "Batch ${BATCH_NUM} completed at: $(date)"
+    else
+    echo "SKIPPING batch ${BATCH_NUM} due to server startup failure"
+    fi
 
     # Kill servers before next batch (cleanup clears memory fragmentation)
     echo "Stopping servers for memory cleanup..."
@@ -205,11 +212,8 @@ for BATCH in "${BATCHES[@]}"; do
     cleanup
     USER_PID=""
     AGENT_PID=""
-    echo "Waiting 60 seconds for HPU devices to release and memory to clear..."
-    sleep 60  # Extended wait for Gaudi HPU device cleanup
-    # Verify HPU devices are free before next batch
-    echo "Checking HPU device status..."
-    hl-smi || echo "WARNING: hl-smi not available, continuing anyway"
+    # Poll for HPU device release instead of fixed sleep
+    wait_for_hpu_release
 done
 
 # Merge all batch results from this job
