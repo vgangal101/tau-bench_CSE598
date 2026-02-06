@@ -58,6 +58,45 @@ cleanup() {
     [ -n "$AGENT_PID" ] && kill -0 $AGENT_PID 2>/dev/null && kill -9 $AGENT_PID 2>/dev/null || true
     fuser -k $USER_PORT/tcp 2>/dev/null || true
     fuser -k $AGENT_PORT/tcp 2>/dev/null || true
+    # Kill ALL python3/vllm processes holding HPU devices (apptainer children)
+    pkill -9 -f "vllm serve.*${USER_PORT}" 2>/dev/null || true
+    pkill -9 -f "vllm serve.*${AGENT_PORT}" 2>/dev/null || true
+    # Kill any remaining apptainer/python3 processes from this job
+    pkill -9 -f "apptainer exec.*vllm-gaudi" 2>/dev/null || true
+    sleep 5
+    # Final sweep: kill any python3 processes on HPU devices
+    for pid in $(hl-smi 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u); do
+        kill -9 "$pid" 2>/dev/null || true
+    done
+}
+
+wait_for_hpu_release() {
+    # Poll hl-smi until all HPUs show base memory (~768MiB) or timeout
+    local max_wait=300  # 5 minutes max
+    local interval=15
+    local elapsed=0
+    echo "Polling HPU device status until memory is released (max ${max_wait}s)..."
+    while [ $elapsed -lt $max_wait ]; do
+        # Check if any HPU still has high memory usage (>2000 MiB = still occupied)
+        local busy_hpus=$(hl-smi 2>/dev/null | grep "MiB" | awk '{print $5}' | sed 's/MiB//' | awk '$1 > 2000 {count++} END {print count+0}')
+        if [ "$busy_hpus" -eq 0 ]; then
+            echo "All HPU devices released after ${elapsed}s"
+            hl-smi 2>/dev/null || true
+            return 0
+        fi
+        echo "  ${busy_hpus} HPU(s) still occupied after ${elapsed}s, waiting..."
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+    echo "WARNING: HPU devices still not fully released after ${max_wait}s"
+    hl-smi 2>/dev/null || true
+    # Last resort: kill any remaining python3 processes on HPUs
+    for pid in $(hl-smi 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u); do
+        echo "Force-killing HPU process pid=$pid"
+        kill -9 "$pid" 2>/dev/null || true
+    done
+    sleep 30
+    return 1
 }
 trap cleanup EXIT INT TERM
 
@@ -115,22 +154,26 @@ for BATCH in "${BATCHES[@]}"; do
     apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 16 --max-num-prefill-seqs 8 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
     AGENT_PID=$!
 
+    BATCH_SKIP=false
     echo -n "Waiting for User server (32B)..."
     for i in {1..180}; do
         if check_server "$USER_PORT"; then echo " Ready! (${i}0s)"; break; fi
-        if ! kill -0 $USER_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$USER_LOG"; exit 1; fi
+        if ! kill -0 $USER_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$USER_LOG"; BATCH_SKIP=true; break; fi
         echo -n "."; sleep 10
     done
-    if ! check_server "$USER_PORT"; then echo " TIMEOUT!"; tail -100 "$USER_LOG"; exit 1; fi
+    if [ "$BATCH_SKIP" = false ] && ! check_server "$USER_PORT"; then echo " TIMEOUT!"; tail -100 "$USER_LOG"; BATCH_SKIP=true; fi
 
+    if [ "$BATCH_SKIP" = false ]; then
     echo -n "Waiting for Agent server (8B)..."
     for i in {1..90}; do
         if check_server "$AGENT_PORT"; then echo " Ready! (${i}0s)"; break; fi
-        if ! kill -0 $AGENT_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$AGENT_LOG"; exit 1; fi
+        if ! kill -0 $AGENT_PID 2>/dev/null; then echo " FAILED!"; tail -100 "$AGENT_LOG"; BATCH_SKIP=true; break; fi
         echo -n "."; sleep 10
     done
-    if ! check_server "$AGENT_PORT"; then echo " TIMEOUT!"; tail -100 "$AGENT_LOG"; exit 1; fi
+    if [ "$BATCH_SKIP" = false ] && ! check_server "$AGENT_PORT"; then echo " TIMEOUT!"; tail -100 "$AGENT_LOG"; BATCH_SKIP=true; fi
+    fi
 
+    if [ "$BATCH_SKIP" = false ]; then
     echo "Both servers ready!"
 
     cd "$REPO_ROOT"
@@ -158,6 +201,9 @@ for BATCH in "${BATCHES[@]}"; do
     fi
 
     echo "Batch ${BATCH_NUM} completed at: $(date)"
+    else
+    echo "SKIPPING batch ${BATCH_NUM} due to server startup failure"
+    fi
 
     # Kill servers before next batch (cleanup clears memory fragmentation)
     echo "Stopping servers for memory cleanup..."
