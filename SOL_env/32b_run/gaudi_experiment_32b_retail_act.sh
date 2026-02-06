@@ -4,9 +4,9 @@
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:hl225:4
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=200G
+#SBATCH --gres=gpu:hl225:8
+#SBATCH --cpus-per-task=60
+#SBATCH --mem=384G
 #SBATCH --time=10:00:00
 #SBATCH --output=32b-retail-act-tau-gaudi_%j.out
 #SBATCH --error=32b-retail-act-tau-gaudi_%j.err
@@ -38,7 +38,7 @@ MAX_MODEL_LEN=40000
 ENV="retail"
 STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=2
+MAX_CONCURRENCY=1
 
 # Batch configuration for retail (115 tasks)
 BATCHES=("0 19" "20 39" "40 59" "60 79" "80 99" "100 114")
@@ -94,16 +94,16 @@ for BATCH in "${BATCHES[@]}"; do
 
     cd "$VLLM_CD"
 
-    echo "=== Starting User Model Server (32B on HPUs 0,1) ==="
+    echo "=== Starting User Model Server (32B on HPUs 0,1,2,3) ==="
     USER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_user_32b_${SLURM_JOB_ID}_batch${BATCH_NUM}.log"
-    export APPTAINERENV_HABANA_VISIBLE_DEVICES=0,1
-    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$USER_MODEL" --host 0.0.0.0 --port $USER_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 2 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$USER_LOG" 2>&1 &
+    export APPTAINERENV_HABANA_VISIBLE_DEVICES=0,1,2,3
+    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$USER_MODEL" --host 0.0.0.0 --port $USER_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 4 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$USER_LOG" 2>&1 &
     USER_PID=$!
 
-    echo "=== Starting Agent Model Server (32B on HPUs 2,3) ==="
+    echo "=== Starting Agent Model Server (32B on HPUs 4,5,6,7) ==="
     AGENT_LOG="$SCRIPT_DIR/logs/gaudi_vllm_agent_32b_${SLURM_JOB_ID}_batch${BATCH_NUM}.log"
-    export APPTAINERENV_HABANA_VISIBLE_DEVICES=2,3
-    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 2 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
+    export APPTAINERENV_HABANA_VISIBLE_DEVICES=4,5,6,7
+    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 4 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
     AGENT_PID=$!
 
     echo -n "Waiting for User server (32B)..."
