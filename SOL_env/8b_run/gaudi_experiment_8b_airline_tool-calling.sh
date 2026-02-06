@@ -48,7 +48,7 @@ VLLM_CD="$GAUDI_BASE/vllm-fork/.cd"
 WORK_DIR="/scratch/$USER/gaudi_tau_bench_${SLURM_JOB_ID}"
 mkdir -p "$WORK_DIR/logs"
 
-cleanup() { [ -n "$USER_PID" ] && kill $USER_PID 2>/dev/null; [ -n "$AGENT_PID" ] && kill $AGENT_PID 2>/dev/null; fuser -k $USER_PORT/tcp 2>/dev/null || true; fuser -k $AGENT_PORT/tcp 2>/dev/null || true; }
+cleanup() { [ -n "$USER_PID" ] && kill $USER_PID 2>/dev/null || true; [ -n "$AGENT_PID" ] && kill $AGENT_PID 2>/dev/null || true; fuser -k $USER_PORT/tcp 2>/dev/null || true; fuser -k $AGENT_PORT/tcp 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
 export APPTAINERENV_HF_HOME=/mnt/hf_cache
@@ -128,7 +128,7 @@ for BATCH in "${BATCHES[@]}"; do
         --model ${AGENT_MODEL} --model-provider openai --model-base-url ${AGENT_URL} \
         --user-model ${USER_MODEL} --user-model-provider openai --user-model-base-url ${USER_URL} \
         --log-dir ${LOG_DIR} --max-concurrency ${MAX_CONCURRENCY} --num-trials ${NUM_TRIALS} \
-        --start-index ${START_IDX} --end-index $((END_IDX + 1))
+        --start-index ${START_IDX} --end-index $((END_IDX + 1)) || echo "WARNING: Batch ${BATCH_NUM} run.py exited with non-zero status, continuing to next batch..."
 
     # Wait for vLLM to finish processing any queued requests
     echo "Batch ${BATCH_NUM} execution complete, waiting for vLLM to finish processing..."
