@@ -32,8 +32,9 @@ mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 # Dual-server architecture: separate 32B models for user and agent
 USER_MODEL="Qwen/Qwen3-32B"
 AGENT_MODEL="Qwen/Qwen3-32B"
-USER_PORT=8300
-AGENT_PORT=8100
+# Dynamic ports based on SLURM job ID to avoid conflicts on shared nodes
+USER_PORT=$((10000 + (SLURM_JOB_ID % 10000)))
+AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
 MAX_MODEL_LEN=40000
 ENV="airline"
 STRATEGY="act"

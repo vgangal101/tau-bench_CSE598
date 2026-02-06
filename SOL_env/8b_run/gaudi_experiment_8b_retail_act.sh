@@ -31,8 +31,9 @@ mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
 USER_MODEL="Qwen/Qwen3-32B"
 AGENT_MODEL="Qwen/Qwen3-8B"
-USER_PORT=8201
-AGENT_PORT=8001
+# Dynamic ports based on SLURM job ID to avoid conflicts on shared nodes
+USER_PORT=$((10000 + (SLURM_JOB_ID % 10000)))
+AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
 MAX_MODEL_LEN=40000
 ENV="retail"
 STRATEGY="act"
