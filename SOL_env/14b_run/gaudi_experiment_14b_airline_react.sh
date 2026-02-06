@@ -48,7 +48,16 @@ VLLM_CD="$GAUDI_BASE/vllm-fork/.cd"
 WORK_DIR="/scratch/$USER/gaudi_tau_bench_${SLURM_JOB_ID}"
 mkdir -p "$WORK_DIR/logs"
 
-cleanup() { [ -n "$USER_PID" ] && kill $USER_PID 2>/dev/null || true; [ -n "$AGENT_PID" ] && kill $AGENT_PID 2>/dev/null || true; fuser -k $USER_PORT/tcp 2>/dev/null || true; fuser -k $AGENT_PORT/tcp 2>/dev/null || true; }
+cleanup() {
+    # Graceful shutdown: SIGTERM first, wait, then SIGKILL as fallback
+    [ -n "$USER_PID" ] && kill $USER_PID 2>/dev/null || true
+    [ -n "$AGENT_PID" ] && kill $AGENT_PID 2>/dev/null || true
+    sleep 10  # Give processes time to shut down gracefully
+    [ -n "$USER_PID" ] && kill -0 $USER_PID 2>/dev/null && kill -9 $USER_PID 2>/dev/null || true
+    [ -n "$AGENT_PID" ] && kill -0 $AGENT_PID 2>/dev/null && kill -9 $AGENT_PID 2>/dev/null || true
+    fuser -k $USER_PORT/tcp 2>/dev/null || true
+    fuser -k $AGENT_PORT/tcp 2>/dev/null || true
+}
 trap cleanup EXIT INT TERM
 
 export APPTAINERENV_HF_HOME=/mnt/hf_cache
@@ -156,8 +165,11 @@ for BATCH in "${BATCHES[@]}"; do
     cleanup
     USER_PID=""
     AGENT_PID=""
-    echo "Waiting 20 seconds for ports to release and memory to clear..."
-    sleep 20  # Increased wait time for proper cleanup
+    echo "Waiting 60 seconds for HPU devices to release and memory to clear..."
+    sleep 60  # Extended wait for Gaudi HPU device cleanup
+    # Verify HPU devices are free before next batch
+    echo "Checking HPU device status..."
+    hl-smi || echo "WARNING: hl-smi not available, continuing anyway"
 done
 
 # Merge all batch results from this job
