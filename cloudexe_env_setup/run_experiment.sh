@@ -23,7 +23,7 @@ AGENT_PORT=8001
 GPU_MEM_UTIL_USER=0.90
 GPU_MEM_UTIL_AGENT=0.90
 MAX_MODEL_LEN=32768
-TENSOR_PARALLEL_SIZE=1
+TENSOR_PARALLEL_SIZE=2
 RESULTS_DIR="results"
 END_INDEX=-1
 START_INDEX=0
@@ -207,7 +207,7 @@ echo "  Model: $USER_MODEL"
 echo "  Port:  $USER_PORT"
 echo "  Log:   $USER_LOG"
 
-vllm serve "$USER_MODEL" \
+CUDA_VISIBLE_DEVICES=0,1 vllm serve "$USER_MODEL" \
     --host 0.0.0.0 \
     --port "$USER_PORT" \
     --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
@@ -232,7 +232,7 @@ echo "  Model: $AGENT_MODEL"
 echo "  Port:  $AGENT_PORT"
 echo "  Log:   $AGENT_LOG"
 
-vllm serve "$AGENT_MODEL" \
+CUDA_VISIBLE_DEVICES=2,3 vllm serve "$AGENT_MODEL" \
     --host 0.0.0.0 \
     --port "$AGENT_PORT" \
     --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
