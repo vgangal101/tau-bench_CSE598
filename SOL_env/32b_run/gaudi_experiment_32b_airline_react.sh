@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=32b-airline-react-tau-gaudi_%j.out
 #SBATCH --error=32b-airline-react-tau-gaudi_%j.err
 #SBATCH --exclusive
@@ -39,7 +39,7 @@ MAX_MODEL_LEN=40960
 ENV="airline"
 STRATEGY="react"
 NUM_TRIALS=5
-MAX_CONCURRENCY=1
+MAX_CONCURRENCY=2
 
 # Batch configuration for airline (50 tasks)
 BATCHES=("0 12" "13 24" "25 37" "38 49")
