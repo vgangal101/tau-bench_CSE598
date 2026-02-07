@@ -3,7 +3,6 @@
 import os
 import json
 import random
-import time
 import traceback
 from math import comb
 import multiprocessing
@@ -66,58 +65,37 @@ def run(config: RunConfig) -> List[EnvRunResult]:
             random.shuffle(idxs)
 
         def _run(idx: int) -> EnvRunResult:
-            max_retries = 3
-            retry_delay = 10
+            isolated_env = get_env(
+                config.env,
+                user_strategy=config.user_strategy,
+                user_model=config.user_model,
+                task_split=config.task_split,
+                user_provider=config.user_model_provider,
+                task_index=idx,
+                user_model_base_url=config.user_model_base_url,
+            )
 
-            for attempt in range(max_retries + 1):
-                try:
-                    isolated_env = get_env(
-                        config.env,
-                        user_strategy=config.user_strategy,
-                        user_model=config.user_model,
-                        task_split=config.task_split,
-                        user_provider=config.user_model_provider,
-                        task_index=idx,
-                        user_model_base_url=config.user_model_base_url,
-                    )
-
-                    print(f"Running task {idx}" + (f" (retry {attempt}/{max_retries})" if attempt > 0 else ""))
-                    res = agent.solve(
-                        env=isolated_env,
-                        task_index=idx,
-                    )
-                    result = EnvRunResult(
-                        task_id=idx,
-                        reward=res.reward,
-                        info=res.info,
-                        traj=res.messages,
-                        trial=i,
-                    )
-                    break
-                except Exception as e:
-                    error_str = str(e).lower()
-                    is_connection_error = any(phrase in error_str for phrase in [
-                        "connection error",
-                        "client has been closed",
-                        "connection reset",
-                        "connection refused",
-                        "connect timeout",
-                    ])
-
-                    if is_connection_error and attempt < max_retries:
-                        print(f"⚠️ Connection error on task {idx} (attempt {attempt + 1}/{max_retries + 1}), retrying in {retry_delay}s...")
-                        time.sleep(retry_delay)
-                        continue
-
-                    result = EnvRunResult(
-                        task_id=idx,
-                        reward=0.0,
-                        info={"error": str(e), "traceback": traceback.format_exc()},
-                        traj=[],
-                        trial=i,
-                    )
-                    break
-
+            print(f"Running task {idx}")
+            try:
+                res = agent.solve(
+                    env=isolated_env,
+                    task_index=idx,
+                )
+                result = EnvRunResult(
+                    task_id=idx,
+                    reward=res.reward,
+                    info=res.info,
+                    traj=res.messages,
+                    trial=i,
+                )
+            except Exception as e:
+                result = EnvRunResult(
+                    task_id=idx,
+                    reward=0.0,
+                    info={"error": str(e), "traceback": traceback.format_exc()},
+                    traj=[],
+                    trial=i,
+                )
             print(
                 "✅" if result.reward == 1 else "❌",
                 f"task_id={idx}",
