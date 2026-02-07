@@ -34,7 +34,7 @@ AGENT_MODEL="Qwen/Qwen3-8B"
 # Dynamic ports based on SLURM job ID to avoid conflicts on shared nodes
 USER_PORT=$((10000 + (SLURM_JOB_ID % 10000)))
 AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
-MAX_MODEL_LEN=40000
+MAX_MODEL_LEN=40960
 ENV="retail"
 STRATEGY="react"
 NUM_TRIALS=5
@@ -70,34 +70,6 @@ cleanup() {
     done
 }
 
-wait_for_hpu_release() {
-    # Poll hl-smi until all HPUs show base memory (~768MiB) or timeout
-    local max_wait=300  # 5 minutes max
-    local interval=15
-    local elapsed=0
-    echo "Polling HPU device status until memory is released (max ${max_wait}s)..."
-    while [ $elapsed -lt $max_wait ]; do
-        # Check if any HPU still has high memory usage (>2000 MiB = still occupied)
-        local busy_hpus=$(hl-smi 2>/dev/null | grep "MiB" | awk '{print $5}' | sed 's/MiB//' | awk '$1 > 2000 {count++} END {print count+0}')
-        if [ "$busy_hpus" -eq 0 ]; then
-            echo "All HPU devices released after ${elapsed}s"
-            hl-smi 2>/dev/null || true
-            return 0
-        fi
-        echo "  ${busy_hpus} HPU(s) still occupied after ${elapsed}s, waiting..."
-        sleep $interval
-        elapsed=$((elapsed + interval))
-    done
-    echo "WARNING: HPU devices still not fully released after ${max_wait}s"
-    hl-smi 2>/dev/null || true
-    # Last resort: kill any remaining python3 processes on HPUs
-    for pid in $(hl-smi 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u); do
-        echo "Force-killing HPU process pid=$pid"
-        kill -9 "$pid" 2>/dev/null || true
-    done
-    sleep 30
-    return 1
-}
 trap cleanup EXIT INT TERM
 
 export APPTAINERENV_HF_HOME=/mnt/hf_cache
@@ -212,8 +184,23 @@ for BATCH in "${BATCHES[@]}"; do
     cleanup
     USER_PID=""
     AGENT_PID=""
-    # Poll for HPU device release instead of fixed sleep
-    wait_for_hpu_release
+    # Kill any remaining vLLM worker processes owned by this user
+    pkill -9 -u $USER -f "vllm.entrypoints" 2>/dev/null || true
+    # Wait for HPU devices to release memory (poll every 15s, max 180s)
+    echo "Waiting for HPU devices to release memory..."
+    for hpu_wait in $(seq 1 12); do
+        sleep 15
+        if ! pgrep -u $USER -f "vllm" > /dev/null 2>&1; then
+            echo "All vLLM processes exited after $((hpu_wait * 15))s"
+            break
+        fi
+        pkill -9 -u $USER -f "vllm" 2>/dev/null || true
+        echo -n "."
+    done
+    # Allow HPU memory to fully deallocate
+    sleep 30
+    echo "Checking HPU device status..."
+    hl-smi || echo "WARNING: hl-smi not available, continuing anyway"
 done
 
 # Merge all batch results from this job
