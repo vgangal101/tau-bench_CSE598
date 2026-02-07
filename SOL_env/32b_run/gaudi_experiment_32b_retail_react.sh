@@ -39,10 +39,10 @@ MAX_MODEL_LEN=40000
 ENV="retail"
 STRATEGY="react"
 NUM_TRIALS=5
-MAX_CONCURRENCY=1
+MAX_CONCURRENCY=2
 
-# Batch configuration for retail (115 tasks)
-BATCHES=("0 19" "20 39" "40 59" "60 79" "80 99" "100 114")
+# Batch configuration for retail (115 tasks) — smaller batches to prevent vLLM server degradation
+BATCHES=("0 9" "10 19" "20 29" "30 39" "40 49" "50 59" "60 69" "70 79" "80 89" "90 99" "100 109" "110 114")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
