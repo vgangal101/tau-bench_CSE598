@@ -562,6 +562,42 @@ python SOL_env/32b_retail/merge_results.py --strategy react --dry-run  # preview
 
 **Configuration:** Same as original `32b_run` scripts (8 HPUs, TP=4 each server, 24h time, MAX_CONCURRENCY=2, NUM_TRIALS=5). Result files include `_part{N}_` in the filename for merge identification.
 
+**How the split scripts work:**
+
+Each `part{N}_{strategy}.sh` is a self-contained SLURM job identical to the original `32b_run` scripts, with these key differences:
+- `BATCHES` array contains only 4 of the 12 original batches (instead of all 12)
+- `PART_NUM` and `TASK_RANGE` variables track which slice this job handles
+- Result files are named with `_part{N}_batch{M}_job{SLURM_JOB_ID}.json` so the merge tool can identify them
+- The inline Python merge at the end of the original scripts is removed; `merge_results.py` handles this separately
+- Each part gets its own 24h wall time, so failure in one part doesn't lose the others
+
+Within each part, the batch loop works identically to the originals: start both vLLM servers (User 32B on HPUs 0-3, Agent 32B on HPUs 4-7), run `run.py` for that batch's task range, kill servers, wait for HPU memory release, then start the next batch.
+
+**How `merge_results.py` works:**
+
+The merge tool scans `results_gaudi/retail/{strategy}/` for files matching `*_part*_batch*_job*.json` and combines them into a single result file. It has 4 layers of protection against failed jobs:
+
+1. **Job ID filtering** (`--job-ids` / `--exclude-jobs`): Whitelist specific successful SLURM job IDs, or blacklist known-failed ones. This is the primary defense when a job crashes and you resubmit.
+2. **Corrupted file detection**: If a job crashed mid-write leaving truncated JSON, the file is caught by `json.JSONDecodeError` and skipped with a warning.
+3. **Empty file skipping**: If a batch's vLLM server never started (0 results produced), the file is skipped.
+4. **Deduplication**: If you rerun a failed part without cleaning up old files, both old and new results exist. The merge keeps only the latest result for each `(task_id, trial)` pair, so retry results overwrite the failed run's results.
+
+```bash
+# Preview what will be merged (always do this first)
+python merge_results.py --strategy react --dry-run
+
+# Merge only results from specific successful jobs
+python merge_results.py --strategy react --job-ids 46800001 46800002 46800003
+
+# Merge everything except a known-failed job
+python merge_results.py --strategy react --exclude-jobs 46703271
+
+# Default: merge all found files (with dedup + corruption handling)
+python merge_results.py --strategy react
+```
+
+Each file is printed with `OK` or `SKIP` status during loading, and the tool reports task coverage (which of 0-114 are present) before writing. The `--dry-run` flag previews everything without writing output.
+
 #### Running Gaudi Experiments
 
 ```bash
