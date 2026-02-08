@@ -239,10 +239,10 @@ Scripts are **directory-independent** - you can submit from any location:
 
 ```bash
 # Submit from anywhere (recommended)
-sbatch /scratch/$USER/tau-bench-project/tau-bench/SOL_env/day2/int8_experiment_8b.sh
+sbatch /scratch/$USER/tau-bench-project/tau-bench_CSE598/SOL_env/day2/int8_experiment_8b.sh
 
 # Or from the script's directory
-cd /scratch/$USER/tau-bench-project/tau-bench/SOL_env/day2
+cd /scratch/$USER/tau-bench-project/tau-bench_CSE598/SOL_env/day2
 sbatch int8_experiment_8b.sh
 
 # Monitor job
@@ -320,11 +320,11 @@ The `multi_node_experiment.sh` script runs experiments across **2 separate nodes
 
 ```bash
 # From repo root (recommended)
-cd /scratch/$USER/tau-bench-project/tau-bench
+cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
 sbatch SOL_env/multi_node_experiment.sh
 
 # Or from SOL_env directory
-cd /scratch/$USER/tau-bench-project/tau-bench/SOL_env
+cd /scratch/$USER/tau-bench-project/tau-bench_CSE598/SOL_env
 sbatch multi_node_experiment.sh
 ```
 
@@ -491,19 +491,38 @@ All Gaudi scripts use these settings for the **User server (32B)**:
 | MAX_CONCURRENCY | 4 | Parallel task workers |
 | NUM_TRIALS | 5 | Trials per task |
 | MAX_MODEL_LEN | 40000 | Context window tokens |
-| Time Limit | 10 hours | SLURM wall time |
 | Environments | retail (115 tasks), airline (50 tasks) | |
 | Strategies | act, react, tool-calling | |
 
+#### SLURM Time Limits
+
+| Experiment | Time Limit |
+|------------|------------|
+| 32B retail | 24:00:00 |
+| 32B airline | 24:00:00 |
+| 14B retail | 24:00:00 |
+| 14B airline | 12:00:00 |
+| 8B retail | 18:00:00 |
+| 8B airline | 10:00:00 |
+| 4B retail | 16:00:00 |
+| 4B airline | 10:00:00 |
+
 #### Batched Execution (Memory Stability)
 
-All scripts use batched execution with server restarts to prevent vLLM memory fragmentation:
+All scripts use batched execution with server restarts to prevent vLLM memory fragmentation.
+Batch sizes vary by model size to manage memory constraints:
 
-**Retail (115 tasks) - 3 batches:**
-- Batch 1: tasks 0-38, Batch 2: tasks 39-76, Batch 3: tasks 77-114
+**Airline (50 tasks) - 4 batches (all sizes):**
+- Batch 1: 0-12, Batch 2: 13-24, Batch 3: 25-37, Batch 4: 38-49
 
-**Airline (50 tasks) - 2 batches:**
-- Batch 1: tasks 0-24, Batch 2: tasks 25-49
+**Retail (115 tasks) - varies by model size:**
+
+| Model | Batches | Batch Size | Ranges |
+|-------|---------|------------|--------|
+| 32B | 12 | ~10 tasks | 0-9, 10-19, ..., 100-109, 110-114 |
+| 14B | 6 | ~20 tasks | 0-19, 20-39, 40-59, 60-79, 80-99, 100-114 |
+| 8B | 6 | ~20 tasks | 0-19, 20-39, 40-59, 60-79, 80-99, 100-114 |
+| 4B | 6 | ~20 tasks | 0-19, 20-39, 40-59, 60-79, 80-99, 100-114 |
 
 Between batches: servers killed, 10s wait, fresh restart. Results merged at job end.
 

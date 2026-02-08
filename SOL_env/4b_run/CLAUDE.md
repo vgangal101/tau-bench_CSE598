@@ -9,4 +9,12 @@
 |----|------|---|-------|------|
 | #315 | 4:38 PM | 🔵 | Complete Gaudi HPU vLLM deployment script for dual-model tau-bench experiment | ~542 |
 | #314 | 4:37 PM | 🔵 | vLLM CUDA library error on Gaudi HPU platform | ~362 |
+
+### Feb 8, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #771 | 9:24 AM | 🔵 | Batch range configurations verified across experiment scripts | ~406 |
+| #766 | 9:23 AM | 🔵 | SLURM time limits documented across all experiment scripts | ~376 |
+| #765 | 9:22 AM | 🔵 | SLURM Job Script Time Allocations Verification | ~448 |
 </claude-mem-context>
