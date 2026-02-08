@@ -453,9 +453,13 @@ SOL_env/
 ├── 14b_run/                             # 14B agent experiments (3 HPUs)
 │   ├── gaudi_experiment_14b_retail_*.sh
 │   └── gaudi_experiment_14b_airline_*.sh
-└── 32b_run/                             # 32B agent experiments (4 HPUs, dual-server)
-    ├── gaudi_experiment_32b_retail_*.sh
-    └── gaudi_experiment_32b_airline_*.sh
+├── 32b_run/                             # 32B agent experiments (4 HPUs, dual-server)
+│   ├── gaudi_experiment_32b_retail_*.sh
+│   └── gaudi_experiment_32b_airline_*.sh
+└── 32b_retail/                          # Split 32B retail into 3 parallel jobs
+    ├── part{1,2,3}_{act,react,tool-calling}.sh
+    ├── submit_all.sh                    # Submit all parts for a strategy
+    └── merge_results.py                 # Merge part results
 ```
 
 #### Gaudi Experiment Configuration
@@ -525,6 +529,38 @@ Batch sizes vary by model size to manage memory constraints:
 | 4B | 6 | ~20 tasks | 0-19, 20-39, 40-59, 60-79, 80-99, 100-114 |
 
 Between batches: servers killed, 10s wait, fresh restart. Results merged at job end.
+
+#### Split 32B Retail Experiments (`SOL_env/32b_retail/`)
+
+The 32B retail experiments (115 tasks, 12 batches) are too large for a single 24-hour SLURM job due to HPU memory leaks causing failures after ~2 batches. The `SOL_env/32b_retail/` directory splits each strategy into **3 independent SLURM jobs** (each 24h), each handling 4 batches (~40 tasks).
+
+```
+SOL_env/32b_retail/
+├── part1_{act,react,tool-calling}.sh   # Tasks 0-39   (batches: 0-9, 10-19, 20-29, 30-39)
+├── part2_{act,react,tool-calling}.sh   # Tasks 40-79  (batches: 40-49, 50-59, 60-69, 70-79)
+├── part3_{act,react,tool-calling}.sh   # Tasks 80-114 (batches: 80-89, 90-99, 100-109, 110-114)
+├── submit_all.sh                       # Submit all 3 parts for a given strategy
+├── merge_results.py                    # Merge part results into single file
+├── logs/                               # All logs
+└── results_gaudi/retail/{strategy}/    # All results
+```
+
+**Usage:**
+```bash
+# Submit all 3 parts for a strategy (runs in parallel)
+./SOL_env/32b_retail/submit_all.sh react
+
+# Or submit individually
+sbatch SOL_env/32b_retail/part1_react.sh
+sbatch SOL_env/32b_retail/part2_react.sh
+sbatch SOL_env/32b_retail/part3_react.sh
+
+# After all jobs complete, merge results
+python SOL_env/32b_retail/merge_results.py --strategy react
+python SOL_env/32b_retail/merge_results.py --strategy react --dry-run  # preview only
+```
+
+**Configuration:** Same as original `32b_run` scripts (8 HPUs, TP=4 each server, 24h time, MAX_CONCURRENCY=2, NUM_TRIALS=5). Result files include `_part{N}_` in the filename for merge identification.
 
 #### Running Gaudi Experiments
 
