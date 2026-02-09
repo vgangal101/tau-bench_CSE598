@@ -1,0 +1,39 @@
+vllm:
+  user_server:
+    model: Qwen/Qwen3-32B
+    port: 8000
+    max_model_len: 32768
+    gpu_memory_utilization: 0.90
+    tensor_parallel_size: 2
+    quantization: null
+    enforce_eager: true
+    trust_remote_code: true
+
+  agent_server:
+    model: Qwen/Qwen3-32B
+    port: 8001
+    max_model_len: 32768
+    gpu_memory_utilization: 0.90
+    tensor_parallel_size: 2
+    quantization: null
+    enforce_eager: true
+    trust_remote_code: true
+
+  tool_call_parser: hermes
+  log_dir: vllm_logs
+  server_ready_timeout: 600
+
+benchmark:
+  env: retail
+  agent_strategy: tool-calling
+  num_trials: 5
+  temperature: 0.0
+  task_split: test
+  start_index: 0
+  end_index: -1
+  task_ids: null
+  log_dir: results
+  max_concurrency: 20
+  seed: 10
+  shuffle: 0
+  user_strategy: llm
