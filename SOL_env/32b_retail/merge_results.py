@@ -11,7 +11,7 @@ Protections against failed jobs:
 
 Usage:
     python merge_results.py --strategy react
-    python merge_results.py --strategy react --job-ids 46800001 46800002 46800003
+    python merge_results.py --strategy react --job-ids 46800001 46800002
     python merge_results.py --strategy react --exclude-jobs 46703271
     python merge_results.py --strategy react --dry-run
 """
@@ -277,7 +277,7 @@ def main():
 
     # Check parts coverage
     print(f"Parts found: {sorted(parts_seen.keys())}")
-    expected_parts = {1, 2, 3}
+    expected_parts = set(range(1, 7))
     missing_parts = expected_parts - set(parts_seen.keys())
     if missing_parts:
         print(f"WARNING: Missing parts: {sorted(missing_parts)}")

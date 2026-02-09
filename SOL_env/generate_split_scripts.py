@@ -88,8 +88,8 @@ TIME_LIMITS = {
     ("8b", "retail"): "10:00:00",
     ("14b", "airline"): "10:00:00",
     ("14b", "retail"): "12:00:00",
-    ("32b", "airline"): "16:00:00",
-    ("32b", "retail"): "24:00:00",
+    ("32b", "airline"): "10:00:00",
+    ("32b", "retail"): "14:00:00",
 }
 
 # Batch splits per environment
@@ -99,6 +99,16 @@ AIRLINE_PARTS = {
     2: {"task_range": "25-49", "batches": [("25", "37"), ("38", "49")]},
 }
 
+# Airline 32B: 50 tasks → 4 parts, 1 batch each
+# HPU devices can't be reacquired after vLLM shutdown within same SLURM job
+# (synStatus=8 [Device not found]), so each part runs exactly 1 batch and exits.
+AIRLINE_32B_PARTS = {
+    1: {"task_range": "0-12", "batches": [("0", "12")]},
+    2: {"task_range": "13-24", "batches": [("13", "24")]},
+    3: {"task_range": "25-37", "batches": [("25", "37")]},
+    4: {"task_range": "38-49", "batches": [("38", "49")]},
+}
+
 # Retail (4B/8B/14B): 115 tasks → 3 parts, 2 batches each
 RETAIL_PARTS = {
     1: {"task_range": "0-39", "batches": [("0", "19"), ("20", "39")]},
@@ -106,28 +116,21 @@ RETAIL_PARTS = {
     3: {"task_range": "80-114", "batches": [("80", "99"), ("100", "114")]},
 }
 
-# Retail 32B: 115 tasks → 3 parts, 4 batches each (matches existing 32b_retail/)
+# Retail 32B: 115 tasks → 6 parts, 1 batch each
+# Same HPU device reacquisition issue as airline 32B.
 RETAIL_32B_PARTS = {
-    1: {
-        "task_range": "0-39",
-        "batches": [("0", "9"), ("10", "19"), ("20", "29"), ("30", "39")],
-    },
-    2: {
-        "task_range": "40-79",
-        "batches": [("40", "49"), ("50", "59"), ("60", "69"), ("70", "79")],
-    },
-    3: {
-        "task_range": "80-114",
-        "batches": [("80", "89"), ("90", "99"), ("100", "109"), ("110", "114")],
-    },
+    1: {"task_range": "0-19", "batches": [("0", "19")]},
+    2: {"task_range": "20-39", "batches": [("20", "39")]},
+    3: {"task_range": "40-59", "batches": [("40", "59")]},
+    4: {"task_range": "60-79", "batches": [("60", "79")]},
+    5: {"task_range": "80-99", "batches": [("80", "99")]},
+    6: {"task_range": "100-114", "batches": [("100", "114")]},
 }
 
-# What to generate (skip 32b_retail — it already exists)
+# What to generate
 EXPERIMENTS = []
 for size in ["4b", "8b", "14b", "32b"]:
     for env in ["airline", "retail"]:
-        if size == "32b" and env == "retail":
-            continue  # Already exists in 32b_retail/
         EXPERIMENTS.append((size, env))
 
 
@@ -855,7 +858,7 @@ if __name__ == "__main__":
 def get_parts_config(model_size: str, env: str) -> dict:
     """Get the parts configuration for a given model/env combo."""
     if env == "airline":
-        return AIRLINE_PARTS
+        return AIRLINE_32B_PARTS if model_size == "32b" else AIRLINE_PARTS
     elif model_size == "32b":
         return RETAIL_32B_PARTS
     else:
@@ -941,10 +944,9 @@ def main():
     print(f"\n{'='*60}")
     if args.dry_run:
         print(f"DRY RUN: Would create {total_files} files in {len(EXPERIMENTS)} directories")
-        print("(32b_retail/ skipped — already exists)")
+        print(f"  (includes 32b splits with 1 batch per part for HPU compatibility)")
     else:
         print(f"Generated {total_files} files in {total_dirs} directories")
-        print("(32b_retail/ skipped — already exists)")
         print("\nNext steps:")
         print("  1. Review generated scripts")
         print("  2. Delete old dirs: rm -rf SOL_env/{4b,8b,14b,32b}_run/")

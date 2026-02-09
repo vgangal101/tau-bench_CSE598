@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=32b-retail-tool-calling-p2-tau-gaudi
+#SBATCH --job-name=32b-retail-tool-calling-p5-tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
@@ -8,18 +8,18 @@
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
 #SBATCH --time=14:00:00
-#SBATCH --output=32b-retail-tool-calling-p2-tau-gaudi_%j.out
-#SBATCH --error=32b-retail-tool-calling-p2-tau-gaudi_%j.err
+#SBATCH --output=32b-retail-tool-calling-p5-tau-gaudi_%j.out
+#SBATCH --error=32b-retail-tool-calling-p5-tau-gaudi_%j.err
 #SBATCH --exclusive
 
 set -e
 SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/32b_retail"
 REPO_ROOT="${SLURM_SUBMIT_DIR}"
 mkdir -p "$SCRIPT_DIR/logs"
-exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p2_${SLURM_JOB_ID}.out") 2>&1
-exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p2_${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p5_${SLURM_JOB_ID}.out") 2>&1
+exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p5_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 32B Retail Tool-Calling Part 2/6 (Tasks 20-39) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 32B Retail Tool-Calling Part 5/6 (Tasks 80-99) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -39,11 +39,11 @@ ENV="retail"
 STRATEGY="tool-calling"
 NUM_TRIALS=5
 MAX_CONCURRENCY=2
-PART_NUM=2
-TASK_RANGE="20-39"
+PART_NUM=5
+TASK_RANGE="80-99"
 
-# Batch configuration for Part 2 (tasks 20-39)
-BATCHES=("20 39")
+# Batch configuration for Part 5 (tasks 80-99)
+BATCHES=("80 99")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"

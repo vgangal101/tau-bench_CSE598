@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
-#SBATCH --time=24:00:00
+#SBATCH --time=14:00:00
 #SBATCH --output=32b-retail-react-p1-tau-gaudi_%j.out
 #SBATCH --error=32b-retail-react-p1-tau-gaudi_%j.err
 #SBATCH --exclusive
@@ -19,7 +19,7 @@ mkdir -p "$SCRIPT_DIR/logs"
 exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-react-p1_${SLURM_JOB_ID}.out") 2>&1
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-react-p1_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 32B Retail React Part 1 (Tasks 0-39) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 32B Retail React Part 1/6 (Tasks 0-19) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -29,7 +29,6 @@ export APPTAINER_TMPDIR="/scratch/$USER/apptainer_tmp"
 export HF_HOME="/scratch/$USER/hf_cache"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
-# Dual-server architecture: separate 32B models for user and agent
 USER_MODEL="Qwen/Qwen3-32B"
 AGENT_MODEL="Qwen/Qwen3-32B"
 # Dynamic ports based on SLURM job ID to avoid conflicts on shared nodes
@@ -41,10 +40,10 @@ STRATEGY="react"
 NUM_TRIALS=5
 MAX_CONCURRENCY=2
 PART_NUM=1
-TASK_RANGE="0-39"
+TASK_RANGE="0-19"
 
-# Batch configuration for Part 1 (tasks 0-39)
-BATCHES=("0 9" "10 19" "20 29" "30 39")
+# Batch configuration for Part 1 (tasks 0-19)
+BATCHES=("0 19")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
@@ -156,7 +155,7 @@ for BATCH in "${BATCHES[@]}"; do
     fi
 
     if [ "$BATCH_SKIP" = false ]; then
-        echo -n "Waiting for Agent server (32B)..."
+        echo -n "Waiting for Agent server (32B on HPUs 4,5,6,7)..."
         for i in {1..180}; do
             if check_server "$AGENT_PORT"; then echo " Ready! (${i}0s)"; break; fi
             if ! kill -0 $AGENT_PID 2>/dev/null; then

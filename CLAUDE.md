@@ -454,8 +454,8 @@ SOL_env/
 ├── 8b_retail/                           # 3 parts × 3 strategies = 9 scripts
 ├── 14b_airline/                         # 2 parts × 3 strategies = 6 scripts
 ├── 14b_retail/                          # 3 parts × 3 strategies = 9 scripts
-├── 32b_airline/                         # 2 parts × 3 strategies = 6 scripts
-└── 32b_retail/                          # 3 parts × 3 strategies = 9 scripts
+├── 32b_airline/                         # 4 parts × 3 strategies = 12 scripts (1 batch/part)
+└── 32b_retail/                          # 6 parts × 3 strategies = 18 scripts (1 batch/part)
 ```
 
 Each directory contains:
