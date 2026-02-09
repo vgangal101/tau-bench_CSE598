@@ -19,63 +19,155 @@ This guide explains how to run tau-bench experiments on Intel Gaudi2 (HPU) accel
 2. **SLURM Account**: `class_cse59827694spring2026`
 3. **tau-bench Environment**: Created automatically if missing
 
-## Quick Start
+## Step-by-Step: Running an Experiment
 
-### Submit All Parts for One Experiment
+This walks through the full workflow using 32B retail as an example. Replace `32b_retail` with your directory (e.g., `8b_airline`, `14b_retail`).
+
+### Step 1: Submit Jobs
 
 ```bash
-# From the repository root directory
+# Always start from repo root
 cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
 
-# Submit all parts for a strategy (runs 2-3 independent SLURM jobs in parallel)
-./SOL_env/8b_retail/submit_all.sh act
+# Submit all parts for a strategy (runs 3 independent SLURM jobs in parallel)
+./SOL_env/32b_retail/submit_all.sh act
+./SOL_env/32b_retail/submit_all.sh react
+./SOL_env/32b_retail/submit_all.sh tool-calling
 
-# Output:
+# Output for each:
 #   Part 1 (tasks 0-39):   Job 46900001
 #   Part 2 (tasks 40-79):  Job 46900002
 #   Part 3 (tasks 80-114): Job 46900003
 ```
 
-### Submit a Single Part
-
+Or submit a single part individually:
 ```bash
-sbatch SOL_env/8b_retail/part1_act.sh
+sbatch SOL_env/32b_retail/part1_act.sh
 ```
 
-### Monitor Jobs
+### Step 2: Monitor Running Jobs
 
 ```bash
-# Check job status
+# Quick status of all your jobs
 squeue -u $USER
 
-# View job logs (replace JOB_ID with actual job ID)
-tail -f SOL_env/8b_retail/logs/tau-gaudi-8b-retail-act-p1_JOB_ID.out
+# Detailed status with time elapsed and node info
+squeue -u $USER -o "%.10i %.30j %.8T %.10M %.6D %R"
+
+# Detailed info for a specific job (state, node, time used, etc.)
+scontrol show job <JOB_ID>
+
+# Watch live output of a running job
+tail -f SOL_env/32b_retail/logs/tau-gaudi-32b-retail-act-p1_<JOB_ID>.out
+
+# Watch vLLM server logs if debugging server issues
+tail -f SOL_env/32b_retail/logs/gaudi_vllm_user_32b_<JOB_ID>_batch1.log
+tail -f SOL_env/32b_retail/logs/gaudi_vllm_agent_32b_<JOB_ID>_batch1.log
 
 # Cancel a job
-scancel JOB_ID
+scancel <JOB_ID>
 
 # Cancel all your jobs
 scancel -u $USER
 ```
 
-### After Jobs Complete: Merge Results
+### Step 3: Check if Jobs Succeeded
+
+After a job finishes, verify it completed successfully:
 
 ```bash
-# Preview what will be merged (always do this first)
-python SOL_env/8b_retail/merge_results.py --strategy act --dry-run
+# Check exit status (look for COMPLETED vs FAILED/TIMEOUT)
+sacct -j <JOB_ID> --format=JobID,JobName,State,ExitCode,Elapsed
 
-# Merge results into a single file
-python SOL_env/8b_retail/merge_results.py --strategy act
+# Check the log tail — successful part ends with:
+#   "Part 1 (tasks 0-39) complete: 2/2 batches succeeded."
+# Failed part ends with:
+#   "FAILED: No batches completed successfully."
+tail -20 SOL_env/32b_retail/logs/tau-gaudi-32b-retail-act-p1_<JOB_ID>.out
+
+# Count result files (each successful batch produces one file)
+ls SOL_env/32b_retail/results_gaudi/retail/act/*_part*_job*.json
 ```
 
-### If a Part Failed: Resubmit Just That Part
+### Step 4: Merge Results
+
+The merge tool is the best way to see overall completeness:
+
+```bash
+# ALWAYS dry-run first to see what you have
+python SOL_env/32b_retail/merge_results.py --strategy act --dry-run
+```
+
+Successful output looks like:
+```
+Parts found: [1, 2, 3]           ← all 3 present = good
+Task coverage: 115/115            ← full coverage = good
+Total results: 575                ← 115 × 5 trials = complete
+[DRY RUN] Would merge the above results. No output written.
+```
+
+If a part is missing:
+```
+Parts found: [1, 3]
+WARNING: Missing parts: [2]      ← Part 2 failed — resubmit it
+Task coverage: 75/115
+```
+
+Once satisfied, write the merged file:
+```bash
+python SOL_env/32b_retail/merge_results.py --strategy act
+```
+
+### Step 5: Handle Failures
+
+If a part failed, just resubmit that one part:
 
 ```bash
 # Only part 2 failed — resubmit it
-sbatch SOL_env/8b_retail/part2_act.sh
+sbatch SOL_env/32b_retail/part2_act.sh
 
-# Re-merge after it completes (deduplication handles overlaps automatically)
-python SOL_env/8b_retail/merge_results.py --strategy act
+# After it completes, re-merge (deduplication handles overlaps automatically)
+python SOL_env/32b_retail/merge_results.py --strategy act --dry-run
+python SOL_env/32b_retail/merge_results.py --strategy act
+```
+
+If a resubmitted job also produced bad results alongside the new good ones:
+```bash
+# Exclude the failed job's results by ID
+python SOL_env/32b_retail/merge_results.py --strategy act --exclude-jobs <FAILED_JOB_ID>
+
+# Or whitelist only the good jobs
+python SOL_env/32b_retail/merge_results.py --strategy act --job-ids <GOOD_JOB_1> <GOOD_JOB_2> <GOOD_JOB_3>
+```
+
+### Quick Reference: All Commands for 32B
+
+```bash
+# ── Airline (2 parts × 3 strategies = 6 jobs) ──
+./SOL_env/32b_airline/submit_all.sh act
+./SOL_env/32b_airline/submit_all.sh react
+./SOL_env/32b_airline/submit_all.sh tool-calling
+
+# After all airline jobs complete:
+python SOL_env/32b_airline/merge_results.py --strategy act --dry-run
+python SOL_env/32b_airline/merge_results.py --strategy act
+python SOL_env/32b_airline/merge_results.py --strategy react --dry-run
+python SOL_env/32b_airline/merge_results.py --strategy react
+python SOL_env/32b_airline/merge_results.py --strategy tool-calling --dry-run
+python SOL_env/32b_airline/merge_results.py --strategy tool-calling
+
+# ── Retail (3 parts × 3 strategies = 9 jobs) ──
+./SOL_env/32b_retail/submit_all.sh act
+./SOL_env/32b_retail/submit_all.sh react
+./SOL_env/32b_retail/submit_all.sh tool-calling
+
+# After all retail jobs complete:
+python SOL_env/32b_retail/merge_results.py --strategy act --dry-run
+python SOL_env/32b_retail/merge_results.py --strategy act
+python SOL_env/32b_retail/merge_results.py --strategy react --dry-run
+python SOL_env/32b_retail/merge_results.py --strategy react
+python SOL_env/32b_retail/merge_results.py --strategy tool-calling --dry-run
+python SOL_env/32b_retail/merge_results.py --strategy tool-calling
 ```
 
 ## Directory Structure
@@ -446,10 +538,31 @@ cat SOL_env/8b_retail/logs/gaudi_vllm_agent_8b_JOB_ID_batch1.log
 ```
 
 ### A Part Failed — What Do I Do?
-1. Check which part failed: `squeue -u $USER` or check logs
-2. Resubmit just that part: `sbatch SOL_env/8b_retail/part2_act.sh`
-3. After it completes, re-merge: `python SOL_env/8b_retail/merge_results.py --strategy act`
+1. Check which part failed:
+   ```bash
+   sacct -j <JOB_ID> --format=JobID,JobName,State,ExitCode,Elapsed
+   tail -20 SOL_env/8b_retail/logs/tau-gaudi-8b-retail-act-p2_<JOB_ID>.out
+   ```
+2. Resubmit just that part:
+   ```bash
+   sbatch SOL_env/8b_retail/part2_act.sh
+   ```
+3. After it completes, dry-run merge to verify, then merge:
+   ```bash
+   python SOL_env/8b_retail/merge_results.py --strategy act --dry-run
+   python SOL_env/8b_retail/merge_results.py --strategy act
+   ```
 4. Deduplication automatically keeps the latest results
+
+### How Do I Know if Everything Succeeded?
+Run the dry-run merge — it tells you exactly what's complete and what's missing:
+```bash
+python SOL_env/8b_retail/merge_results.py --strategy act --dry-run
+```
+- `Parts found: [1, 2, 3]` — all parts present
+- `Task coverage: 115/115` — all tasks covered
+- `Total results: 575` — all 115 tasks × 5 trials
+- `WARNING: Missing parts: [2]` — Part 2 failed, needs resubmission
 
 ### Context Window Exceeded
 If you see `ContextWindowExceededError`, increase `MAX_MODEL_LEN` in the script.
