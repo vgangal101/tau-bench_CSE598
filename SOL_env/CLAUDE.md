@@ -8,4 +8,14 @@
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
 | #874 | 6:41 PM | 🟣 | Enhanced Gaudi Experiment Template with Batch Resume and Health Monitoring | ~562 |
+
+### Feb 9, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #1053 | 2:17 PM | 🔴 | Added Orphaned HPU Process Cleanup to Prevent Memory Leaks | ~402 |
+| #1052 | 2:16 PM | ✅ | Agent Server GPU Memory Utilization Parameterized | ~367 |
+| #1050 | " | ✅ | Script Generator Parameterized GPU Memory Utilization | ~359 |
+| #1048 | 2:15 PM | 🔵 | Script Generator Configuration for Multi-Size Model Experiments with HPU Device Management Strategy | ~419 |
+| #1046 | 2:14 PM | 🔵 | Script Generator Implements Batch Processing with Server Health Checks and Failure Recovery | ~433 |
 </claude-mem-context>

@@ -238,6 +238,12 @@ for BATCH in "${BATCHES[@]}"; do
         pkill -9 -u $USER -f "vllm" 2>/dev/null || true
         echo -n "."
     done
+    # Force-kill any orphaned python3 processes still holding HPU memory
+    # These are child workers from vLLM containers that survive parent process kill
+    for hpu_pid in $(hl-smi 2>/dev/null | awk '/python3/{print $3}'); do
+        echo "Killing orphaned HPU process: $hpu_pid"
+        kill -9 "$hpu_pid" 2>/dev/null || true
+    done
     # Allow HPU memory to fully deallocate
     sleep 30
     echo "Checking HPU device status..."
