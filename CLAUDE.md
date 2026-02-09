@@ -493,9 +493,9 @@ All Gaudi scripts use these settings for the **User server (32B)**:
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| MAX_CONCURRENCY | 4 | Parallel task workers |
+| MAX_CONCURRENCY | 2 | Parallel task workers |
 | NUM_TRIALS | 5 | Trials per task |
-| MAX_MODEL_LEN | 40000 | Context window tokens |
+| MAX_MODEL_LEN | 40960 | Context window tokens |
 | Environments | retail (115 tasks), airline (50 tasks) | |
 | Strategies | act, react, tool-calling | |
 
@@ -509,21 +509,32 @@ All Gaudi scripts use these settings for the **User server (32B)**:
 | 8B retail | 3 | 10:00:00 |
 | 14B airline | 2 | 10:00:00 |
 | 14B retail | 3 | 12:00:00 |
-| 32B airline | 2 | 16:00:00 |
-| 32B retail | 3 | 24:00:00 |
+| 32B airline | 4 | 10:00:00 |
+| 32B retail | 6 | 14:00:00 |
 
 #### Split Parts Configuration
 
-All experiments are split into independent SLURM parts. Each part starts fresh vLLM servers, runs 2 batches, and shuts down. Parts run in parallel as separate SLURM jobs.
+All experiments are split into independent SLURM parts. Parts run in parallel as separate SLURM jobs.
 
-**Airline (50 tasks) → 2 parts:**
+For 4B/8B/14B, each part runs 2 batches with server restart between them. For 32B, each part runs **1 batch only** — the Habana driver cannot reacquire HPU devices after vLLM shutdown within the same SLURM job (`synStatus=8 [Device not found]`).
+
+**Airline 4B/8B/14B (50 tasks) → 2 parts, 2 batches each:**
 
 | Part | Tasks | Batches |
 |------|-------|---------|
 | Part 1 | 0-24 | `("0 12" "13 24")` |
 | Part 2 | 25-49 | `("25 37" "38 49")` |
 
-**Retail 4B/8B/14B (115 tasks) → 3 parts:**
+**Airline 32B (50 tasks) → 4 parts, 1 batch each:**
+
+| Part | Tasks |
+|------|-------|
+| Part 1 | 0-12 |
+| Part 2 | 13-24 |
+| Part 3 | 25-37 |
+| Part 4 | 38-49 |
+
+**Retail 4B/8B/14B (115 tasks) → 3 parts, 2 batches each:**
 
 | Part | Tasks | Batches |
 |------|-------|---------|
@@ -531,13 +542,16 @@ All experiments are split into independent SLURM parts. Each part starts fresh v
 | Part 2 | 40-79 | `("40 59" "60 79")` |
 | Part 3 | 80-114 | `("80 99" "100 114")` |
 
-**Retail 32B (115 tasks) → 3 parts (4 batches each):**
+**Retail 32B (115 tasks) → 6 parts, 1 batch each:**
 
-| Part | Tasks | Batches |
-|------|-------|---------|
-| Part 1 | 0-39 | `("0 9" "10 19" "20 29" "30 39")` |
-| Part 2 | 40-79 | `("40 49" "50 59" "60 69" "70 79")` |
-| Part 3 | 80-114 | `("80 89" "90 99" "100 109" "110 114")` |
+| Part | Tasks |
+|------|-------|
+| Part 1 | 0-19 |
+| Part 2 | 20-39 |
+| Part 3 | 40-59 |
+| Part 4 | 60-79 |
+| Part 5 | 80-99 |
+| Part 6 | 100-114 |
 
 #### Running Split Experiments
 
@@ -563,7 +577,7 @@ python SOL_env/8b_retail/merge_results.py --strategy act
 
 Each `part{N}_{strategy}.sh` is a self-contained SLURM job that:
 1. Requests HPUs, sets up environment
-2. Loops through its assigned batches (2 per part, 4 for 32B retail):
+2. Loops through its assigned batches (2 per part for 4B/8B/14B, 1 for 32B):
    - Starts User (32B) and Agent vLLM servers
    - Waits for both servers to be healthy
    - Runs `run.py` for that batch's task range
@@ -593,11 +607,9 @@ python merge_results.py --strategy react                              # merge al
 If you need to modify the template or configuration, edit `SOL_env/generate_split_scripts.py` and re-run:
 
 ```bash
-python SOL_env/generate_split_scripts.py          # regenerate all 7 directories
+python SOL_env/generate_split_scripts.py          # regenerate all 8 directories
 python SOL_env/generate_split_scripts.py --dry-run # preview only
 ```
-
-This will overwrite existing generated directories (but not `32b_retail/` which is excluded).
 
 #### Team Assignments
 

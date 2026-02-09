@@ -29,15 +29,16 @@ This walks through the full workflow using 32B retail as an example. Replace `32
 # Always start from repo root
 cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
 
-# Submit all parts for a strategy (runs 3 independent SLURM jobs in parallel)
+# Submit all parts for a strategy (runs independent SLURM jobs in parallel)
 ./SOL_env/32b_retail/submit_all.sh act
 ./SOL_env/32b_retail/submit_all.sh react
 ./SOL_env/32b_retail/submit_all.sh tool-calling
 
-# Output for each:
-#   Part 1 (tasks 0-39):   Job 46900001
-#   Part 2 (tasks 40-79):  Job 46900002
-#   Part 3 (tasks 80-114): Job 46900003
+# Output for each (32B retail = 6 parts):
+#   Part 1 (tasks 0-19):   Job 46900001
+#   Part 2 (tasks 20-39):  Job 46900002
+#   ...
+#   Part 6 (tasks 100-114): Job 46900006
 ```
 
 Or submit a single part individually:
@@ -143,7 +144,7 @@ python SOL_env/32b_retail/merge_results.py --strategy act --job-ids <GOOD_JOB_1>
 ### Quick Reference: All Commands for 32B
 
 ```bash
-# ── Airline (2 parts × 3 strategies = 6 jobs) ──
+# ── Airline (4 parts × 3 strategies = 12 jobs) ──
 ./SOL_env/32b_airline/submit_all.sh act
 ./SOL_env/32b_airline/submit_all.sh react
 ./SOL_env/32b_airline/submit_all.sh tool-calling
@@ -156,7 +157,7 @@ python SOL_env/32b_airline/merge_results.py --strategy react
 python SOL_env/32b_airline/merge_results.py --strategy tool-calling --dry-run
 python SOL_env/32b_airline/merge_results.py --strategy tool-calling
 
-# ── Retail (3 parts × 3 strategies = 9 jobs) ──
+# ── Retail (6 parts × 3 strategies = 18 jobs) ──
 ./SOL_env/32b_retail/submit_all.sh act
 ./SOL_env/32b_retail/submit_all.sh react
 ./SOL_env/32b_retail/submit_all.sh tool-calling
@@ -183,8 +184,8 @@ SOL_env/
 ├── 8b_retail/                   # 9 scripts
 ├── 14b_airline/                 # 6 scripts
 ├── 14b_retail/                  # 9 scripts
-├── 32b_airline/                 # 6 scripts
-└── 32b_retail/                  # 9 scripts
+├── 32b_airline/                 # 4 parts × 3 strategies = 12 scripts (1 batch/part)
+└── 32b_retail/                  # 6 parts × 3 strategies = 18 scripts (1 batch/part)
 ```
 
 Each directory contains:
@@ -229,10 +230,12 @@ Examples:
 
 | Environment | Strategy | Parts | Scripts |
 |-------------|----------|-------|---------|
-| airline | act, react, tool-calling | 2 each | `32b_airline/part{1,2}_{strategy}.sh` |
-| retail | act, react, tool-calling | 3 each | `32b_retail/part{1,2,3}_{strategy}.sh` |
+| airline | act, react, tool-calling | 4 each | `32b_airline/part{1..4}_{strategy}.sh` |
+| retail | act, react, tool-calling | 6 each | `32b_retail/part{1..6}_{strategy}.sh` |
 
-**Total: 60 part scripts** (15 per model size)
+**Note**: 32B uses 1 batch per part because the Habana driver cannot reacquire HPU devices after vLLM shutdown within the same SLURM job (`synStatus=8 [Device not found]`).
+
+**Total: 72 part scripts** (12 for 4B/8B/14B each + 30 for 32B)
 
 ## Split Configuration
 
@@ -240,14 +243,25 @@ Examples:
 
 A single SLURM job runs all batches sequentially. If batch 3 of 6 crashes due to HPU memory leaks, batches 4-6 never run. With splits, each part is independent — if Part 2 fails, Parts 1 and 3 still succeed.
 
-### Airline (50 tasks) → 2 parts
+For 32B specifically, the Habana driver cannot reacquire HPU devices after vLLM shutdown within the same SLURM job (`synStatus=8 [Device not found]`), so 32B parts run exactly **1 batch each**.
+
+### Airline 4B/8B/14B (50 tasks) → 2 parts, 2 batches each
 
 | Part | Tasks | Batches | Expected Results |
 |------|-------|---------|-----------------|
 | Part 1 | 0-24 | `("0 12" "13 24")` | 125 (25 tasks × 5 trials) |
 | Part 2 | 25-49 | `("25 37" "38 49")` | 125 (25 tasks × 5 trials) |
 
-### Retail 4B/8B/14B (115 tasks) → 3 parts
+### Airline 32B (50 tasks) → 4 parts, 1 batch each
+
+| Part | Tasks | Expected Results |
+|------|-------|-----------------|
+| Part 1 | 0-12 | 65 (13 tasks × 5 trials) |
+| Part 2 | 13-24 | 60 (12 tasks × 5 trials) |
+| Part 3 | 25-37 | 65 (13 tasks × 5 trials) |
+| Part 4 | 38-49 | 60 (12 tasks × 5 trials) |
+
+### Retail 4B/8B/14B (115 tasks) → 3 parts, 2 batches each
 
 | Part | Tasks | Batches | Expected Results |
 |------|-------|---------|-----------------|
@@ -255,13 +269,16 @@ A single SLURM job runs all batches sequentially. If batch 3 of 6 crashes due to
 | Part 2 | 40-79 | `("40 59" "60 79")` | 200 (40 tasks × 5 trials) |
 | Part 3 | 80-114 | `("80 99" "100 114")` | 175 (35 tasks × 5 trials) |
 
-### Retail 32B (115 tasks) → 3 parts (4 batches each)
+### Retail 32B (115 tasks) → 6 parts, 1 batch each
 
-| Part | Tasks | Batches | Expected Results |
-|------|-------|---------|-----------------|
-| Part 1 | 0-39 | `("0 9" "10 19" "20 29" "30 39")` | 200 |
-| Part 2 | 40-79 | `("40 49" "50 59" "60 69" "70 79")` | 200 |
-| Part 3 | 80-114 | `("80 89" "90 99" "100 109" "110 114")` | 175 |
+| Part | Tasks | Expected Results |
+|------|-------|-----------------|
+| Part 1 | 0-19 | 100 (20 tasks × 5 trials) |
+| Part 2 | 20-39 | 100 (20 tasks × 5 trials) |
+| Part 3 | 40-59 | 100 (20 tasks × 5 trials) |
+| Part 4 | 60-79 | 100 (20 tasks × 5 trials) |
+| Part 5 | 80-99 | 100 (20 tasks × 5 trials) |
+| Part 6 | 100-114 | 75 (15 tasks × 5 trials) |
 
 ## Configuration
 
@@ -285,8 +302,8 @@ A single SLURM job runs all batches sequentially. If batch 3 of 6 crashes due to
 | 8B retail | 3 | 10:00:00 |
 | 14B airline | 2 | 10:00:00 |
 | 14B retail | 3 | 12:00:00 |
-| 32B airline | 2 | 16:00:00 |
-| 32B retail | 3 | 24:00:00 |
+| 32B airline | 4 | 10:00:00 |
+| 32B retail | 6 | 14:00:00 |
 
 ### Dual-Server Architecture
 
@@ -347,7 +364,7 @@ AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
 Each `part{N}_{strategy}.sh` is a self-contained SLURM job that:
 
 1. **Setup**: Requests HPUs, sets up conda environment, configures Gaudi env vars
-2. **Batch Loop** (2 batches per part, 4 for 32B retail):
+2. **Batch Loop** (2 batches per part for 4B/8B/14B, 1 batch for 32B):
    - Starts User (32B) and Agent vLLM servers via Apptainer
    - Waits for both servers to be healthy (up to 30 min)
    - Runs `python run.py` for that batch's task range
@@ -398,7 +415,7 @@ vi SOL_env/generate_split_scripts.py
 # Preview what would be created
 python SOL_env/generate_split_scripts.py --dry-run
 
-# Regenerate all 7 directories (32b_retail/ excluded, already exists)
+# Regenerate all 8 directories
 python SOL_env/generate_split_scripts.py
 ```
 
