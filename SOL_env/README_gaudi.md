@@ -21,21 +21,25 @@ This guide explains how to run tau-bench experiments on Intel Gaudi2 (HPU) accel
 
 ## Quick Start
 
-### Submit a Single Experiment
+### Submit All Parts for One Experiment
 
 ```bash
 # From the repository root directory
 cd /scratch/$USER/tau-bench-project/tau-bench_CSE598
 
-# Submit a specific experiment
-sbatch SOL_env/4b_run/gaudi_experiment_4b_retail_act.sh
+# Submit all parts for a strategy (runs 2-3 independent SLURM jobs in parallel)
+./SOL_env/8b_retail/submit_all.sh act
+
+# Output:
+#   Part 1 (tasks 0-39):   Job 46900001
+#   Part 2 (tasks 40-79):  Job 46900002
+#   Part 3 (tasks 80-114): Job 46900003
 ```
 
-### Submit All Experiments
+### Submit a Single Part
 
 ```bash
-# Submit all 24 experiments at once
-for script in SOL_env/*/gaudi_experiment_*.sh; do sbatch $script; done
+sbatch SOL_env/8b_retail/part1_act.sh
 ```
 
 ### Monitor Jobs
@@ -45,7 +49,7 @@ for script in SOL_env/*/gaudi_experiment_*.sh; do sbatch $script; done
 squeue -u $USER
 
 # View job logs (replace JOB_ID with actual job ID)
-tail -f SOL_env/4b_run/logs/tau-gaudi-4b-retail-act_JOB_ID.out
+tail -f SOL_env/8b_retail/logs/tau-gaudi-8b-retail-act-p1_JOB_ID.out
 
 # Cancel a job
 scancel JOB_ID
@@ -54,52 +58,118 @@ scancel JOB_ID
 scancel -u $USER
 ```
 
-## Available Scripts (24 Total)
+### After Jobs Complete: Merge Results
+
+```bash
+# Preview what will be merged (always do this first)
+python SOL_env/8b_retail/merge_results.py --strategy act --dry-run
+
+# Merge results into a single file
+python SOL_env/8b_retail/merge_results.py --strategy act
+```
+
+### If a Part Failed: Resubmit Just That Part
+
+```bash
+# Only part 2 failed — resubmit it
+sbatch SOL_env/8b_retail/part2_act.sh
+
+# Re-merge after it completes (deduplication handles overlaps automatically)
+python SOL_env/8b_retail/merge_results.py --strategy act
+```
+
+## Directory Structure
+
+All experiments are split into **independent SLURM parts** so that if one part fails, the others still succeed. HPU memory leaks cause vLLM to crash after a few batches, so splitting prevents losing an entire job.
+
+```
+SOL_env/
+├── generate_split_scripts.py    # Generator for all split directories
+├── 4b_airline/                  # 2 parts × 3 strategies = 6 scripts
+├── 4b_retail/                   # 3 parts × 3 strategies = 9 scripts
+├── 8b_airline/                  # 6 scripts
+├── 8b_retail/                   # 9 scripts
+├── 14b_airline/                 # 6 scripts
+├── 14b_retail/                  # 9 scripts
+├── 32b_airline/                 # 6 scripts
+└── 32b_retail/                  # 9 scripts
+```
+
+Each directory contains:
+- `part{N}_{strategy}.sh` — self-contained SLURM job for a subset of tasks
+- `submit_all.sh` — submits all parts for a given strategy
+- `merge_results.py` — merges part results into a single file
 
 ### Script Naming Convention
+
 ```
-gaudi_experiment_{MODEL_SIZE}_{ENVIRONMENT}_{STRATEGY}.sh
+SOL_env/{MODEL}_{ENV}/part{PART}_{STRATEGY}.sh
 ```
 
-### 4B Model Scripts
-| Environment | Strategy | Script |
-|-------------|----------|--------|
-| retail | act | `4b_run/gaudi_experiment_4b_retail_act.sh` |
-| retail | react | `4b_run/gaudi_experiment_4b_retail_react.sh` |
-| retail | tool-calling | `4b_run/gaudi_experiment_4b_retail_tool-calling.sh` |
-| airline | act | `4b_run/gaudi_experiment_4b_airline_act.sh` |
-| airline | react | `4b_run/gaudi_experiment_4b_airline_react.sh` |
-| airline | tool-calling | `4b_run/gaudi_experiment_4b_airline_tool-calling.sh` |
+Examples:
+- `SOL_env/8b_retail/part1_act.sh` — 8B agent, retail env, act strategy, part 1
+- `SOL_env/32b_airline/part2_tool-calling.sh` — 32B agent, airline env, tool-calling, part 2
 
-### 8B Model Scripts
-| Environment | Strategy | Script |
-|-------------|----------|--------|
-| retail | act | `8b_run/gaudi_experiment_8b_retail_act.sh` |
-| retail | react | `8b_run/gaudi_experiment_8b_retail_react.sh` |
-| retail | tool-calling | `8b_run/gaudi_experiment_8b_retail_tool-calling.sh` |
-| airline | act | `8b_run/gaudi_experiment_8b_airline_act.sh` |
-| airline | react | `8b_run/gaudi_experiment_8b_airline_react.sh` |
-| airline | tool-calling | `8b_run/gaudi_experiment_8b_airline_tool-calling.sh` |
+## Available Scripts
 
-### 14B Model Scripts
-| Environment | Strategy | Script |
-|-------------|----------|--------|
-| retail | act | `14b_run/gaudi_experiment_14b_retail_act.sh` |
-| retail | react | `14b_run/gaudi_experiment_14b_retail_react.sh` |
-| retail | tool-calling | `14b_run/gaudi_experiment_14b_retail_tool-calling.sh` |
-| airline | act | `14b_run/gaudi_experiment_14b_airline_act.sh` |
-| airline | react | `14b_run/gaudi_experiment_14b_airline_react.sh` |
-| airline | tool-calling | `14b_run/gaudi_experiment_14b_airline_tool-calling.sh` |
+### 4B Model (assigned to Harish)
 
-### 32B Model Scripts
-| Environment | Strategy | Script |
-|-------------|----------|--------|
-| retail | act | `32b_run/gaudi_experiment_32b_retail_act.sh` |
-| retail | react | `32b_run/gaudi_experiment_32b_retail_react.sh` |
-| retail | tool-calling | `32b_run/gaudi_experiment_32b_retail_tool-calling.sh` |
-| airline | act | `32b_run/gaudi_experiment_32b_airline_act.sh` |
-| airline | react | `32b_run/gaudi_experiment_32b_airline_react.sh` |
-| airline | tool-calling | `32b_run/gaudi_experiment_32b_airline_tool-calling.sh` |
+| Environment | Strategy | Parts | Scripts |
+|-------------|----------|-------|---------|
+| airline | act, react, tool-calling | 2 each | `4b_airline/part{1,2}_{strategy}.sh` |
+| retail | act, react, tool-calling | 3 each | `4b_retail/part{1,2,3}_{strategy}.sh` |
+
+### 8B Model (assigned to Sai)
+
+| Environment | Strategy | Parts | Scripts |
+|-------------|----------|-------|---------|
+| airline | act, react, tool-calling | 2 each | `8b_airline/part{1,2}_{strategy}.sh` |
+| retail | act, react, tool-calling | 3 each | `8b_retail/part{1,2,3}_{strategy}.sh` |
+
+### 14B Model (assigned to Smit)
+
+| Environment | Strategy | Parts | Scripts |
+|-------------|----------|-------|---------|
+| airline | act, react, tool-calling | 2 each | `14b_airline/part{1,2}_{strategy}.sh` |
+| retail | act, react, tool-calling | 3 each | `14b_retail/part{1,2,3}_{strategy}.sh` |
+
+### 32B Model (assigned to Vardaan / hehernan)
+
+| Environment | Strategy | Parts | Scripts |
+|-------------|----------|-------|---------|
+| airline | act, react, tool-calling | 2 each | `32b_airline/part{1,2}_{strategy}.sh` |
+| retail | act, react, tool-calling | 3 each | `32b_retail/part{1,2,3}_{strategy}.sh` |
+
+**Total: 60 part scripts** (15 per model size)
+
+## Split Configuration
+
+### Why Split?
+
+A single SLURM job runs all batches sequentially. If batch 3 of 6 crashes due to HPU memory leaks, batches 4-6 never run. With splits, each part is independent — if Part 2 fails, Parts 1 and 3 still succeed.
+
+### Airline (50 tasks) → 2 parts
+
+| Part | Tasks | Batches | Expected Results |
+|------|-------|---------|-----------------|
+| Part 1 | 0-24 | `("0 12" "13 24")` | 125 (25 tasks × 5 trials) |
+| Part 2 | 25-49 | `("25 37" "38 49")` | 125 (25 tasks × 5 trials) |
+
+### Retail 4B/8B/14B (115 tasks) → 3 parts
+
+| Part | Tasks | Batches | Expected Results |
+|------|-------|---------|-----------------|
+| Part 1 | 0-39 | `("0 19" "20 39")` | 200 (40 tasks × 5 trials) |
+| Part 2 | 40-79 | `("40 59" "60 79")` | 200 (40 tasks × 5 trials) |
+| Part 3 | 80-114 | `("80 99" "100 114")` | 175 (35 tasks × 5 trials) |
+
+### Retail 32B (115 tasks) → 3 parts (4 batches each)
+
+| Part | Tasks | Batches | Expected Results |
+|------|-------|---------|-----------------|
+| Part 1 | 0-39 | `("0 9" "10 19" "20 29" "30 39")` | 200 |
+| Part 2 | 40-79 | `("40 49" "50 59" "60 69" "70 79")` | 200 |
+| Part 3 | 80-114 | `("80 89" "90 99" "100 109" "110 114")` | 175 |
 
 ## Configuration
 
@@ -107,128 +177,164 @@ gaudi_experiment_{MODEL_SIZE}_{ENVIRONMENT}_{STRATEGY}.sh
 
 | Setting | Value |
 |---------|-------|
-| MAX_MODEL_LEN | 40000 |
-| MAX_CONCURRENCY | 4 |
+| MAX_MODEL_LEN | 40960 |
+| MAX_CONCURRENCY | 2 |
 | NUM_TRIALS | 5 |
-| Time Limit | 10 hours |
 | Partition | gaudi |
 | QOS | class_gaudi |
 
-### Batched Execution
+### SLURM Time Limits (Per Part)
 
-To prevent vLLM memory fragmentation crashes during long-running experiments, all scripts use **batched execution with server restarts**:
-
-**Retail (115 tasks) - 3 batches:**
-- Batch 1: tasks 0-38 (39 tasks)
-- Batch 2: tasks 39-76 (38 tasks)
-- Batch 3: tasks 77-114 (38 tasks)
-
-**Airline (50 tasks) - 2 batches:**
-- Batch 1: tasks 0-24 (25 tasks)
-- Batch 2: tasks 25-49 (25 tasks)
-
-**How it works:**
-1. Servers start for batch 1
-2. Run experiment with `--start-index 0 --end-index 39`
-3. Save results with batch suffix
-4. Kill servers (clears GPU memory fragmentation)
-5. Wait 10 seconds for port release
-6. Repeat for remaining batches
-7. Merge all batch results into final JSON file
-
-**Benefits:**
-- `MAX_CONCURRENCY=4` (increased from 2) for faster execution
-- Server restarts clear memory fragmentation between batches
-- Each batch runs with fresh KV cache allocation
-- Results automatically merged at end of job
-
-**Output files:**
-- Batch files: `{strategy}-{model}-0.0_range_{start}-{end}_..._batch{N}_job{JOB_ID}.json`
-- Merged file: `{strategy}-{model}-0.0_range_0-{total}_job{JOB_ID}_merged.json`
+| Experiment | Parts | Time per Part |
+|------------|-------|---------------|
+| 4B airline | 2 | 8:00:00 |
+| 4B retail | 3 | 10:00:00 |
+| 8B airline | 2 | 8:00:00 |
+| 8B retail | 3 | 10:00:00 |
+| 14B airline | 2 | 10:00:00 |
+| 14B retail | 3 | 12:00:00 |
+| 32B airline | 2 | 16:00:00 |
+| 32B retail | 3 | 24:00:00 |
 
 ### Dual-Server Architecture
 
-All experiments use a **consistent 32B user simulator** (Qwen3-32B) to ensure fair comparison across agent model sizes. The 4B, 8B, and 14B scripts run two separate vLLM servers:
+All experiments use a **consistent 32B user simulator** (Qwen3-32B) to ensure fair comparison across agent model sizes. Each part script runs two separate vLLM servers:
+
+**4B/8B/14B:**
 
 | Server | Model | HPUs | Tensor Parallel | Purpose |
 |--------|-------|------|-----------------|---------|
 | User Server | Qwen3-32B | 0,1 | 2 | User simulator |
 | Agent Server | Qwen3-{4B,8B,14B} | 2 | 1 | Agent model |
 
+**32B:**
+
+| Server | Model | HPUs | Tensor Parallel | Purpose |
+|--------|-------|------|-----------------|---------|
+| User Server | Qwen3-32B | 0,1,2,3 | 4 | User simulator |
+| Agent Server | Qwen3-32B | 4,5,6,7 | 4 | Agent model |
+
 ### Resource Allocation by Agent Model
 
-| Agent Model | Total HPUs | CPUs | Memory | Architecture |
-|-------------|------------|------|--------|--------------|
-| Qwen3-4B | 3 | 24 | 160G | 32B (TP=2, HPU 0,1) + 4B (TP=1, HPU 2) |
-| Qwen3-8B | 3 | 24 | 160G | 32B (TP=2, HPU 0,1) + 8B (TP=1, HPU 2) |
-| Qwen3-14B | 3 | 24 | 160G | 32B (TP=2, HPU 0,1) + 14B (TP=1, HPU 2) |
-| Qwen3-32B | 4 | 32 | 200G | 32B (TP=2, HPU 0,1) + 32B (TP=2, HPU 2,3) |
+| Agent Model | Total HPUs | CPUs | Memory | SLURM gres |
+|-------------|------------|------|--------|------------|
+| Qwen3-4B | 3 | 24 | 160G | `gpu:hl225:3` |
+| Qwen3-8B | 3 | 24 | 160G | `gpu:hl225:3` |
+| Qwen3-14B | 3 | 24 | 160G | `gpu:hl225:3` |
+| Qwen3-32B | 8 | 60 | 384G | `gpu:hl225:8` |
 
 ### Server Configuration Details
 
 | Server | MAX_NUM_SEQS | MAX_PREFILL | GPU Util | Notes |
 |--------|--------------|-------------|----------|-------|
-| User (32B) | 4 | 1 | 0.90 | Stability-optimized for long runs |
-| Agent (4B) | 16 | 8 | 0.85 | |
-| Agent (8B) | 16 | 8 | 0.90 | |
-| Agent (14B) | 12 | 6 | 0.90 | |
-| Agent (32B) | 4 | 1 | 0.90 | Same as User (dual 32B servers) |
+| User (32B, all sizes) | 2 | 1 | 0.85 | Stability-optimized |
+| Agent (4B/8B/14B) | 16 | 8 | 0.85 | Single HPU, more headroom |
+| Agent (32B) | 2 | 1 | 0.85 | Same config as User |
 
 ### Stability Settings Rationale
 
-The User server (32B) settings were optimized for long-running experiments (115 retail tasks × 5 trials = 575 runs):
-
 | Setting | Value | Reason |
 |---------|-------|--------|
-| `--gpu-memory-utilization` | 0.90 | Prevents OOM during extended runs (was 0.95) |
-| `--max-num-seqs` | 4 | Only need 2× MAX_CONCURRENCY headroom (was 6-8) |
-| `--max-num-prefill-seqs` | 1 | Reduces concurrent prefill memory pressure (was 2) |
-| `--max-model-len` | 40000 | Safe within Qwen3's 40960 max_position_embeddings |
+| `--gpu-memory-utilization` | 0.85 | Prevents OOM during extended runs |
+| `--max-num-seqs` | 2 (user/32B agent) | Only need MAX_CONCURRENCY headroom |
+| `--max-num-prefill-seqs` | 1 | Reduces concurrent prefill memory pressure |
+| `--max-model-len` | 40960 | Qwen3's max_position_embeddings |
+| `--swap-space` | 16 | Extra swap for memory overflow |
 
-**Why these matter for retail experiments:**
-- Retail has 115 tasks vs airline's 50 tasks
-- With 5 trials each, that's 575 server requests over many hours
-- Memory fragmentation accumulates, causing "client has been closed" errors
-- Lower `max-num-seqs` drastically reduces KV cache memory requirements
+### Port Assignments
 
-### Port Assignments (to avoid conflicts)
+Ports are dynamically assigned based on SLURM job ID to avoid conflicts:
 
-Each script uses two ports for the dual-server setup:
+```bash
+USER_PORT=$((10000 + (SLURM_JOB_ID % 10000)))
+AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
+```
 
-| Agent Model | Retail User | Retail Agent | Airline User | Airline Agent |
-|-------------|-------------|--------------|--------------|---------------|
-| 4B | 8200 | 8000 | 8300 | 8100 |
-| 8B | 8201 | 8001 | 8301 | 8101 |
-| 14B | 8202 | 8002 | 8302 | 8102 |
-| 32B | 8200 | 8000 | 8300 | 8100 |
+## How Part Scripts Work
 
-Note: All experiments now use dual-server architecture with separate User and Agent vLLM servers.
+Each `part{N}_{strategy}.sh` is a self-contained SLURM job that:
+
+1. **Setup**: Requests HPUs, sets up conda environment, configures Gaudi env vars
+2. **Batch Loop** (2 batches per part, 4 for 32B retail):
+   - Starts User (32B) and Agent vLLM servers via Apptainer
+   - Waits for both servers to be healthy (up to 30 min)
+   - Runs `python run.py` for that batch's task range
+   - Saves results with `_part{N}_batch{M}_job{SLURM_JOB_ID}.json` naming
+   - Kills servers, waits for HPU memory release (poll 15s × 12 + sleep 30)
+3. **Fail-fast**: Aborts if 2 consecutive batches fail (HPU devices likely stuck)
+4. **Reports** success/failure count
+
+### Output File Naming
+
+```
+{strategy}-Qwen3-{size}-0.0_range_{start}-{end}_..._part{N}_batch{M}_job{JOB_ID}.json
+```
+
+The `_part{N}_batch{M}_job{JOB_ID}` suffix enables the merge tool to identify and combine files.
+
+## How merge_results.py Works
+
+The merge tool scans `results_gaudi/{env}/{strategy}/` for files matching `*_part*_batch*_job*.json` and combines them. Protections:
+
+1. **Job ID filtering** (`--job-ids` / `--exclude-jobs`): Whitelist/blacklist specific SLURM job IDs
+2. **Corrupted file detection**: Skips truncated JSON with warnings
+3. **Empty file skipping**: Skips 0-result files
+4. **Deduplication**: Keeps latest result for each `(task_id, trial)` pair
+
+```bash
+# Preview what will be merged (always do this first)
+python merge_results.py --strategy react --dry-run
+
+# Merge only results from specific successful jobs
+python merge_results.py --strategy react --job-ids 46800001 46800002
+
+# Merge everything except a known-failed job
+python merge_results.py --strategy react --exclude-jobs 46703271
+
+# Default: merge all found files (with dedup + corruption handling)
+python merge_results.py --strategy react
+```
+
+## Regenerating Scripts
+
+All split scripts are generated by `generate_split_scripts.py`. If you need to modify the template or configuration:
+
+```bash
+# Edit the generator
+vi SOL_env/generate_split_scripts.py
+
+# Preview what would be created
+python SOL_env/generate_split_scripts.py --dry-run
+
+# Regenerate all 7 directories (32b_retail/ excluded, already exists)
+python SOL_env/generate_split_scripts.py
+```
 
 ## Results Location
 
 Results are saved to:
 ```
-SOL_env/{MODEL}_run/results_gaudi/{ENVIRONMENT}/{STRATEGY}/
+SOL_env/{MODEL}_{ENV}/results_gaudi/{ENV}/{STRATEGY}/
 ```
 
 Example:
 ```
-SOL_env/4b_run/results_gaudi/retail/act/
-SOL_env/8b_run/results_gaudi/airline/react/
+SOL_env/8b_retail/results_gaudi/retail/act/
+SOL_env/32b_airline/results_gaudi/airline/react/
 ```
 
 ## Log Files
 
 Logs are saved to:
 ```
-SOL_env/{MODEL}_run/logs/
+SOL_env/{MODEL}_{ENV}/logs/
 ```
 
-Each job creates:
-- `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}_{JOB_ID}.out` - Main output
-- `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}_{JOB_ID}.err` - Error log
-- `gaudi_vllm_user_32b_{JOB_ID}.log` - User model (32B) vLLM server log
-- `gaudi_vllm_agent_{MODEL}_{JOB_ID}.log` - Agent model vLLM server log
+Each part job creates:
+- `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}-p{PART}_{JOB_ID}.out` — Main output
+- `tau-gaudi-{MODEL}-{ENV}-{STRATEGY}-p{PART}_{JOB_ID}.err` — Error log
+- `gaudi_vllm_user_32b_{JOB_ID}_batch{N}.log` — User model vLLM server log
+- `gaudi_vllm_agent_{MODEL}_{JOB_ID}_batch{N}.log` — Agent model vLLM server log
 
 ## Alternative: SOL's Hosted API
 
@@ -251,23 +357,9 @@ bash SOL_env/gaudi_api_experiment.sh
 | qwen3-30b-a3b-instruct-2507 | 131K |
 | qwen3-235b-a22b-instruct-2507 | 262K |
 
-## How It Works
-
-1. **Job Submission**: Script submitted to SLURM gaudi partition
-2. **Environment Setup**: Cache directories and Gaudi env vars configured
-3. **User Server Start**: Apptainer container launches vLLM with Qwen3-32B (TP=2 on HPUs 0,1)
-4. **Agent Server Start**: Second Apptainer container launches vLLM with agent model
-   - 4B/8B/14B: TP=1 on HPU 2
-   - 32B: TP=2 on HPUs 2,3
-5. **Health Check**: Waits for both servers (up to 30 min for 32B user, 15-20 min for smaller agents)
-6. **tau-bench Run**: `python run.py` with `--user-model-base-url` and `--model-base-url` pointing to separate servers
-7. **Cleanup**: Both vLLM servers terminated
-
-All experiments use dual-server architecture for isolation and stability.
-
 ## Script Robustness Features
 
-All 24 Gaudi scripts include robustness features to prevent common issues:
+All part scripts include these robustness features:
 
 ### 1. Exclusive Node Access (`--exclusive`)
 
@@ -292,14 +384,19 @@ cleanup() {
     [ -n "$AGENT_PID" ] && kill $AGENT_PID 2>/dev/null
     ...
 }
-
-# DANGEROUS - would kill ALL vLLM processes on node (including other jobs):
-# cleanup() { pkill -f "vllm serve" ... }  # DON'T DO THIS
 ```
 
-**Why it matters**: If multiple jobs ran on the same node and one failed, `pkill -f` would kill the other job's vLLM servers.
+### 3. Fail-Fast on Consecutive Failures
 
-### 3. Stale Editable Install Fix
+If 2 consecutive batches fail, the part aborts rather than wasting time on batches that will also fail:
+
+```bash
+CONSECUTIVE_FAILURES=0
+MAX_CONSECUTIVE_FAILURES=2
+# ... if batch fails, increment counter; if it succeeds, reset to 0
+```
+
+### 4. Stale Editable Install Fix
 
 Scripts uninstall before reinstalling tau-bench:
 
@@ -307,16 +404,6 @@ Scripts uninstall before reinstalling tau-bench:
 pip uninstall tau_bench -y 2>/dev/null || true
 pip install -e .
 ```
-
-**Why it's needed**: Python editable installs create `.pth` files that point to the source directory. If the repo was moved or a previous install was corrupted, pip fails with:
-```
-OSError: [Errno 2] No such file or directory: '.../__editable__.tau_bench-0.1.0.pth'
-```
-
-**This is a user-level issue, NOT a node-level issue**:
-- The conda environment (`~/.conda/envs/tau-bench/`) is on shared filesystem
-- Same environment is used regardless of which node runs the job
-- Uninstall clears stale `.pth` files before fresh install
 
 ### Issue Summary
 
@@ -326,6 +413,7 @@ OSError: [Errno 2] No such file or directory: '.../__editable__.tau_bench-0.1.0.
 | HPU conflicts | Node-level | Hardcoded `HABANA_VISIBLE_DEVICES` | `--exclusive` |
 | Process kill race | Node-level | `pkill -f` kills wrong processes | PID-based cleanup |
 | Stale `.pth` files | User-level | Moved repo or corrupted install | `pip uninstall` first |
+| HPU memory leaks | Job-level | vLLM crashes after few batches | Split into independent parts |
 
 ## First-Time Setup
 
@@ -351,11 +439,17 @@ sacctmgr show user $USER withassoc
 Check the vLLM logs (both user and agent servers):
 ```bash
 # User model (32B) log
-cat SOL_env/4b_run/logs/gaudi_vllm_user_32b_JOB_ID.log
+cat SOL_env/8b_retail/logs/gaudi_vllm_user_32b_JOB_ID_batch1.log
 
 # Agent model log
-cat SOL_env/4b_run/logs/gaudi_vllm_agent_4b_JOB_ID.log
+cat SOL_env/8b_retail/logs/gaudi_vllm_agent_8b_JOB_ID_batch1.log
 ```
+
+### A Part Failed — What Do I Do?
+1. Check which part failed: `squeue -u $USER` or check logs
+2. Resubmit just that part: `sbatch SOL_env/8b_retail/part2_act.sh`
+3. After it completes, re-merge: `python SOL_env/8b_retail/merge_results.py --strategy act`
+4. Deduplication automatically keeps the latest results
 
 ### Context Window Exceeded
 If you see `ContextWindowExceededError`, increase `MAX_MODEL_LEN` in the script.
@@ -363,34 +457,11 @@ If you see `ContextWindowExceededError`, increase `MAX_MODEL_LEN` in the script.
 ### Model Download Slow
 First run downloads weights to `/scratch/$USER/hf_cache`. Subsequent runs use cache.
 
-### Stale Editable Install Error
-If you see:
-```
-OSError: [Errno 2] No such file or directory: '.../__editable__.tau_bench-0.1.0.pth'
-```
-This is handled automatically by the scripts (uninstall before install). If it persists, manually clean up:
-```bash
-source activate tau-bench
-pip uninstall tau_bench -y
-rm -f ~/.conda/envs/tau-bench/lib/python3.11/site-packages/__editable__.tau_bench*.pth
-```
-
-### vLLM Server Killed Unexpectedly
-If your vLLM server dies shortly after starting (e.g., "Shutdown complete" after 30-60 seconds), check if another job on the same node ran a cleanup. The `--exclusive` flag prevents this.
-
 ### "Cannot send a request, as the client has been closed" Error
-This error means the vLLM server crashed during the experiment. Common causes:
+This error means the vLLM server crashed during the experiment. The split architecture limits damage — only the current batch's results are lost. Common causes:
 1. **Memory pressure**: Reduce `--gpu-memory-utilization` or `--max-num-seqs`
 2. **Long-running fragmentation**: Server memory fragments over hundreds of requests
 3. **Context too long**: Some tasks exceed `--max-model-len`
-
-The current settings (gpu-mem 0.90, max-num-seqs 4) are tuned to prevent this.
-
-### Jobs Interfering with Each Other
-If multiple jobs seem to affect each other:
-1. Verify `--exclusive` is in the SBATCH directives
-2. Check cleanup function uses PIDs, not `pkill -f`
-3. Check port assignments are unique per model/environment
 
 ## Useful Commands
 
@@ -412,6 +483,7 @@ ls -la /data/sse/gaudi/
 
 | Script | Purpose |
 |--------|---------|
+| `generate_split_scripts.py` | Generate/regenerate all split directories |
 | `gaudi_api_experiment.sh` | Use SOL's hosted API |
 | `gaudi_setup_check.sh` | Diagnostic to verify environment |
 

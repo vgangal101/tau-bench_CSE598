@@ -195,15 +195,16 @@ After this one-time setup, all experiment jobs will work automatically.
 
 ```
 SOL_env/
+├── generate_split_scripts.py          # Generator for all split experiment directories
 ├── multi_node_experiment.sh           # Multi-node: User + Agent on separate nodes
-├── 4b_run/
-│   └── experiment_4b.sh               # User 32B + Agent 4B
-├── 8b_run/
-│   └── experiment_8b.sh               # User 32B + Agent 8B
-├── 14b_run/
-│   └── experiment_14b.sh              # User 32B + Agent 14B
-├── 32b_run/
-│   └── experiment_32b.sh              # User 32B + Agent 32B
+├── 4b_airline/                        # 4B agent, airline env (2 parts)
+├── 4b_retail/                         # 4B agent, retail env (3 parts)
+├── 8b_airline/                        # 8B agent, airline env (2 parts)
+├── 8b_retail/                         # 8B agent, retail env (3 parts)
+├── 14b_airline/                       # 14B agent, airline env (2 parts)
+├── 14b_retail/                        # 14B agent, retail env (3 parts)
+├── 32b_airline/                       # 32B agent, airline env (2 parts)
+└── 32b_retail/                        # 32B agent, retail env (3 parts)
 ```
 
 ### FP16 Scripts (Default Precision)
@@ -442,25 +443,25 @@ See `SOL_env/README_gaudi.md` for detailed setup instructions.
 
 #### Gaudi Experiment Scripts Structure
 
+All experiments are split into **independent SLURM parts** so that if one part fails, the others still succeed. Each directory contains part scripts, a submit helper, and a merge tool.
+
 ```
 SOL_env/
-├── 4b_run/                              # 4B agent experiments (3 HPUs)
-│   ├── gaudi_experiment_4b_retail_*.sh  # retail: act, react, tool-calling
-│   └── gaudi_experiment_4b_airline_*.sh # airline: act, react, tool-calling
-├── 8b_run/                              # 8B agent experiments (3 HPUs)
-│   ├── gaudi_experiment_8b_retail_*.sh
-│   └── gaudi_experiment_8b_airline_*.sh
-├── 14b_run/                             # 14B agent experiments (3 HPUs)
-│   ├── gaudi_experiment_14b_retail_*.sh
-│   └── gaudi_experiment_14b_airline_*.sh
-├── 32b_run/                             # 32B agent experiments (4 HPUs, dual-server)
-│   ├── gaudi_experiment_32b_retail_*.sh
-│   └── gaudi_experiment_32b_airline_*.sh
-└── 32b_retail/                          # Split 32B retail into 3 parallel jobs
-    ├── part{1,2,3}_{act,react,tool-calling}.sh
-    ├── submit_all.sh                    # Submit all parts for a strategy
-    └── merge_results.py                 # Merge part results
+├── generate_split_scripts.py            # Generator for all split directories
+├── 4b_airline/                          # 2 parts × 3 strategies = 6 scripts
+├── 4b_retail/                           # 3 parts × 3 strategies = 9 scripts
+├── 8b_airline/                          # 2 parts × 3 strategies = 6 scripts
+├── 8b_retail/                           # 3 parts × 3 strategies = 9 scripts
+├── 14b_airline/                         # 2 parts × 3 strategies = 6 scripts
+├── 14b_retail/                          # 3 parts × 3 strategies = 9 scripts
+├── 32b_airline/                         # 2 parts × 3 strategies = 6 scripts
+└── 32b_retail/                          # 3 parts × 3 strategies = 9 scripts
 ```
+
+Each directory contains:
+- `part{N}_{strategy}.sh` — self-contained SLURM job for a subset of tasks
+- `submit_all.sh` — submits all parts for a given strategy
+- `merge_results.py` — merges part results into a single file
 
 #### Gaudi Experiment Configuration
 
@@ -469,7 +470,7 @@ SOL_env/
 | 4B | 3 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-4B (TP=1, HPU 2) | Dual-server |
 | 8B | 3 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-8B (TP=1, HPU 2) | Dual-server |
 | 14B | 3 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-14B (TP=1, HPU 2) | Dual-server |
-| 32B | 4 | Qwen3-32B (TP=2, HPU 0,1) | Qwen3-32B (TP=2, HPU 2,3) | Dual-server |
+| 32B | 8 | Qwen3-32B (TP=4, HPU 0-3) | Qwen3-32B (TP=4, HPU 4-7) | Dual-server |
 
 #### Standardized vLLM Settings (Stability-Optimized)
 
@@ -498,123 +499,127 @@ All Gaudi scripts use these settings for the **User server (32B)**:
 | Environments | retail (115 tasks), airline (50 tasks) | |
 | Strategies | act, react, tool-calling | |
 
-#### SLURM Time Limits
+#### SLURM Time Limits (Per Part)
 
-| Experiment | Time Limit |
-|------------|------------|
-| 32B retail | 24:00:00 |
-| 32B airline | 24:00:00 |
-| 14B retail | 24:00:00 |
-| 14B airline | 12:00:00 |
-| 8B retail | 18:00:00 |
-| 8B airline | 10:00:00 |
-| 4B retail | 16:00:00 |
-| 4B airline | 10:00:00 |
+| Experiment | Parts | Time per Part |
+|------------|-------|---------------|
+| 4B airline | 2 | 8:00:00 |
+| 4B retail | 3 | 10:00:00 |
+| 8B airline | 2 | 8:00:00 |
+| 8B retail | 3 | 10:00:00 |
+| 14B airline | 2 | 10:00:00 |
+| 14B retail | 3 | 12:00:00 |
+| 32B airline | 2 | 16:00:00 |
+| 32B retail | 3 | 24:00:00 |
 
-#### Batched Execution (Memory Stability)
+#### Split Parts Configuration
 
-All scripts use batched execution with server restarts to prevent vLLM memory fragmentation.
-Batch sizes vary by model size to manage memory constraints:
+All experiments are split into independent SLURM parts. Each part starts fresh vLLM servers, runs 2 batches, and shuts down. Parts run in parallel as separate SLURM jobs.
 
-**Airline (50 tasks) - 4 batches (all sizes):**
-- Batch 1: 0-12, Batch 2: 13-24, Batch 3: 25-37, Batch 4: 38-49
+**Airline (50 tasks) → 2 parts:**
 
-**Retail (115 tasks) - varies by model size:**
+| Part | Tasks | Batches |
+|------|-------|---------|
+| Part 1 | 0-24 | `("0 12" "13 24")` |
+| Part 2 | 25-49 | `("25 37" "38 49")` |
 
-| Model | Batches | Batch Size | Ranges |
-|-------|---------|------------|--------|
-| 32B | 12 | ~10 tasks | 0-9, 10-19, ..., 100-109, 110-114 |
-| 14B | 6 | ~20 tasks | 0-19, 20-39, 40-59, 60-79, 80-99, 100-114 |
-| 8B | 6 | ~20 tasks | 0-19, 20-39, 40-59, 60-79, 80-99, 100-114 |
-| 4B | 6 | ~20 tasks | 0-19, 20-39, 40-59, 60-79, 80-99, 100-114 |
+**Retail 4B/8B/14B (115 tasks) → 3 parts:**
 
-Between batches: servers killed, 10s wait, fresh restart. Results merged at job end.
+| Part | Tasks | Batches |
+|------|-------|---------|
+| Part 1 | 0-39 | `("0 19" "20 39")` |
+| Part 2 | 40-79 | `("40 59" "60 79")` |
+| Part 3 | 80-114 | `("80 99" "100 114")` |
 
-#### Split 32B Retail Experiments (`SOL_env/32b_retail/`)
+**Retail 32B (115 tasks) → 3 parts (4 batches each):**
 
-The 32B retail experiments (115 tasks, 12 batches) are too large for a single 24-hour SLURM job due to HPU memory leaks causing failures after ~2 batches. The `SOL_env/32b_retail/` directory splits each strategy into **3 independent SLURM jobs** (each 24h), each handling 4 batches (~40 tasks).
+| Part | Tasks | Batches |
+|------|-------|---------|
+| Part 1 | 0-39 | `("0 9" "10 19" "20 29" "30 39")` |
+| Part 2 | 40-79 | `("40 49" "50 59" "60 69" "70 79")` |
+| Part 3 | 80-114 | `("80 89" "90 99" "100 109" "110 114")` |
 
-```
-SOL_env/32b_retail/
-├── part1_{act,react,tool-calling}.sh   # Tasks 0-39   (batches: 0-9, 10-19, 20-29, 30-39)
-├── part2_{act,react,tool-calling}.sh   # Tasks 40-79  (batches: 40-49, 50-59, 60-69, 70-79)
-├── part3_{act,react,tool-calling}.sh   # Tasks 80-114 (batches: 80-89, 90-99, 100-109, 110-114)
-├── submit_all.sh                       # Submit all 3 parts for a given strategy
-├── merge_results.py                    # Merge part results into single file
-├── logs/                               # All logs
-└── results_gaudi/retail/{strategy}/    # All results
-```
-
-**Usage:**
-```bash
-# Submit all 3 parts for a strategy (runs in parallel)
-./SOL_env/32b_retail/submit_all.sh react
-
-# Or submit individually
-sbatch SOL_env/32b_retail/part1_react.sh
-sbatch SOL_env/32b_retail/part2_react.sh
-sbatch SOL_env/32b_retail/part3_react.sh
-
-# After all jobs complete, merge results
-python SOL_env/32b_retail/merge_results.py --strategy react
-python SOL_env/32b_retail/merge_results.py --strategy react --dry-run  # preview only
-```
-
-**Configuration:** Same as original `32b_run` scripts (8 HPUs, TP=4 each server, 24h time, MAX_CONCURRENCY=2, NUM_TRIALS=5). Result files include `_part{N}_` in the filename for merge identification.
-
-**How the split scripts work:**
-
-Each `part{N}_{strategy}.sh` is a self-contained SLURM job identical to the original `32b_run` scripts, with these key differences:
-- `BATCHES` array contains only 4 of the 12 original batches (instead of all 12)
-- `PART_NUM` and `TASK_RANGE` variables track which slice this job handles
-- Result files are named with `_part{N}_batch{M}_job{SLURM_JOB_ID}.json` so the merge tool can identify them
-- The inline Python merge at the end of the original scripts is removed; `merge_results.py` handles this separately
-- Each part gets its own 24h wall time, so failure in one part doesn't lose the others
-
-Within each part, the batch loop works identically to the originals: start both vLLM servers (User 32B on HPUs 0-3, Agent 32B on HPUs 4-7), run `run.py` for that batch's task range, kill servers, wait for HPU memory release, then start the next batch.
-
-**How `merge_results.py` works:**
-
-The merge tool scans `results_gaudi/retail/{strategy}/` for files matching `*_part*_batch*_job*.json` and combines them into a single result file. It has 4 layers of protection against failed jobs:
-
-1. **Job ID filtering** (`--job-ids` / `--exclude-jobs`): Whitelist specific successful SLURM job IDs, or blacklist known-failed ones. This is the primary defense when a job crashes and you resubmit.
-2. **Corrupted file detection**: If a job crashed mid-write leaving truncated JSON, the file is caught by `json.JSONDecodeError` and skipped with a warning.
-3. **Empty file skipping**: If a batch's vLLM server never started (0 results produced), the file is skipped.
-4. **Deduplication**: If you rerun a failed part without cleaning up old files, both old and new results exist. The merge keeps only the latest result for each `(task_id, trial)` pair, so retry results overwrite the failed run's results.
+#### Running Split Experiments
 
 ```bash
-# Preview what will be merged (always do this first)
-python merge_results.py --strategy react --dry-run
+# 1. Submit all parts for a strategy (runs 2 or 3 SLURM jobs in parallel)
+./SOL_env/8b_retail/submit_all.sh act
 
-# Merge only results from specific successful jobs
-python merge_results.py --strategy react --job-ids 46800001 46800002 46800003
-
-# Merge everything except a known-failed job
-python merge_results.py --strategy react --exclude-jobs 46703271
-
-# Default: merge all found files (with dedup + corruption handling)
-python merge_results.py --strategy react
-```
-
-Each file is printed with `OK` or `SKIP` status during loading, and the tool reports task coverage (which of 0-114 are present) before writing. The `--dry-run` flag previews everything without writing output.
-
-#### Running Gaudi Experiments
-
-```bash
-# Submit a single experiment
-sbatch SOL_env/8b_run/gaudi_experiment_8b_retail_react.sh
-
-# Monitor running jobs
+# 2. Monitor
 squeue -u $USER
 
-# Check experiment logs
-tail -f SOL_env/8b_run/logs/tau-gaudi-8b-retail-react_<job_id>.out
+# 3. After all parts complete, merge results
+python SOL_env/8b_retail/merge_results.py --strategy act --dry-run   # preview first
+python SOL_env/8b_retail/merge_results.py --strategy act              # write merged file
 
-# Check vLLM server logs
-tail -f SOL_env/8b_run/logs/gaudi_vllm_user_32b_<job_id>.log
-tail -f SOL_env/8b_run/logs/gaudi_vllm_agent_8b_<job_id>.log
+# 4. If a part failed, just resubmit it
+sbatch SOL_env/8b_retail/part2_act.sh
+
+# 5. Re-merge (deduplication handles overlapping results automatically)
+python SOL_env/8b_retail/merge_results.py --strategy act
 ```
 
-#### Results Location
+#### How Part Scripts Work
 
-Results are saved to `SOL_env/{size}_run/results_gaudi/{env}/{strategy}/`
+Each `part{N}_{strategy}.sh` is a self-contained SLURM job that:
+1. Requests HPUs, sets up environment
+2. Loops through its assigned batches (2 per part, 4 for 32B retail):
+   - Starts User (32B) and Agent vLLM servers
+   - Waits for both servers to be healthy
+   - Runs `run.py` for that batch's task range
+   - Saves results with `_part{N}_batch{M}_job{SLURM_JOB_ID}.json` naming
+   - Kills servers, waits for HPU memory release
+3. Reports success/failure count
+4. Fail-fast: aborts if 2 consecutive batches fail (HPU devices likely stuck)
+
+#### How merge_results.py Works
+
+The merge tool scans `results_gaudi/{env}/{strategy}/` for files matching `*_part*_batch*_job*.json` and combines them into a single result file. Protections:
+
+1. **Job ID filtering** (`--job-ids` / `--exclude-jobs`): Whitelist/blacklist SLURM job IDs
+2. **Corrupted file detection**: Skips truncated JSON with warnings
+3. **Empty file skipping**: Skips 0-result files
+4. **Deduplication**: Keeps latest result for each `(task_id, trial)` pair
+
+```bash
+python merge_results.py --strategy react --dry-run                    # preview
+python merge_results.py --strategy react --job-ids 46800001 46800002  # whitelist
+python merge_results.py --strategy react --exclude-jobs 46703271      # blacklist
+python merge_results.py --strategy react                              # merge all
+```
+
+#### Regenerating Scripts
+
+If you need to modify the template or configuration, edit `SOL_env/generate_split_scripts.py` and re-run:
+
+```bash
+python SOL_env/generate_split_scripts.py          # regenerate all 7 directories
+python SOL_env/generate_split_scripts.py --dry-run # preview only
+```
+
+This will overwrite existing generated directories (but not `32b_retail/` which is excluded).
+
+#### Team Assignments
+
+| Model | Assigned To |
+|-------|------------|
+| 4B | Harish |
+| 8B | Sai |
+| 14B | Smit |
+| 32B | Vardaan / hehernan |
+
+#### Log File Locations (Gaudi)
+
+After a job completes, logs are in the directory's `logs/` folder:
+
+```
+SOL_env/8b_retail/logs/
+├── tau-gaudi-8b-retail-act-p1_<job_id>.out     # SLURM stdout
+├── tau-gaudi-8b-retail-act-p1_<job_id>.err     # SLURM stderr
+├── gaudi_vllm_user_32b_<job_id>_batch1.log     # vLLM user server log
+└── gaudi_vllm_agent_8b_<job_id>_batch1.log     # vLLM agent server log
+```
+
+#### Results Location (Gaudi)
+
+Results are saved to `SOL_env/{size}_{env}/results_gaudi/{env}/{strategy}/`

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=32b-retail-tc-p3-tau-gaudi
+#SBATCH --job-name=32b-airline-act-p1-tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
@@ -7,19 +7,19 @@
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
-#SBATCH --time=24:00:00
-#SBATCH --output=32b-retail-tc-p3-tau-gaudi_%j.out
-#SBATCH --error=32b-retail-tc-p3-tau-gaudi_%j.err
+#SBATCH --time=16:00:00
+#SBATCH --output=32b-airline-act-p1-tau-gaudi_%j.out
+#SBATCH --error=32b-airline-act-p1-tau-gaudi_%j.err
 #SBATCH --exclusive
 
 set -e
-SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/32b_retail"
+SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/32b_airline"
 REPO_ROOT="${SLURM_SUBMIT_DIR}"
 mkdir -p "$SCRIPT_DIR/logs"
-exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p3_${SLURM_JOB_ID}.out") 2>&1
-exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p3_${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-act-p1_${SLURM_JOB_ID}.out") 2>&1
+exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-act-p1_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 32B Retail Tool-Calling Part 3 (Tasks 80-114) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 32B Airline Act Part 1/2 (Tasks 0-24) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -29,22 +29,21 @@ export APPTAINER_TMPDIR="/scratch/$USER/apptainer_tmp"
 export HF_HOME="/scratch/$USER/hf_cache"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
-# Dual-server architecture: separate 32B models for user and agent
 USER_MODEL="Qwen/Qwen3-32B"
 AGENT_MODEL="Qwen/Qwen3-32B"
 # Dynamic ports based on SLURM job ID to avoid conflicts on shared nodes
 USER_PORT=$((10000 + (SLURM_JOB_ID % 10000)))
 AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
 MAX_MODEL_LEN=40960
-ENV="retail"
-STRATEGY="tool-calling"
+ENV="airline"
+STRATEGY="act"
 NUM_TRIALS=5
 MAX_CONCURRENCY=2
-PART_NUM=3
-TASK_RANGE="80-114"
+PART_NUM=1
+TASK_RANGE="0-24"
 
-# Batch configuration for Part 3 (tasks 80-114)
-BATCHES=("80 89" "90 99" "100 109" "110 114")
+# Batch configuration for Part 1 (tasks 0-24)
+BATCHES=("0 12" "13 24")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
@@ -156,7 +155,7 @@ for BATCH in "${BATCHES[@]}"; do
     fi
 
     if [ "$BATCH_SKIP" = false ]; then
-        echo -n "Waiting for Agent server (32B)..."
+        echo -n "Waiting for Agent server (32B on HPUs 4,5,6,7)..."
         for i in {1..180}; do
             if check_server "$AGENT_PORT"; then echo " Ready! (${i}0s)"; break; fi
             if ! kill -0 $AGENT_PID 2>/dev/null; then

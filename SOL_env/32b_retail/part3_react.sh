@@ -105,6 +105,10 @@ USER_URL="http://localhost:${USER_PORT}/v1"
 AGENT_URL="http://localhost:${AGENT_PORT}/v1"
 
 # Run experiments in batches with server restart between batches
+# Fail-fast: abort if consecutive batches fail (HPU devices likely stuck)
+CONSECUTIVE_FAILURES=0
+MAX_CONSECUTIVE_FAILURES=2
+SUCCESSFUL_BATCHES=0
 BATCH_NUM=0
 for BATCH in "${BATCHES[@]}"; do
     read START_IDX END_IDX <<< "$BATCH"
@@ -200,8 +204,19 @@ for BATCH in "${BATCHES[@]}"; do
         fi
 
         echo "Batch ${BATCH_NUM} completed at: $(date)"
+        CONSECUTIVE_FAILURES=0
+        SUCCESSFUL_BATCHES=$((SUCCESSFUL_BATCHES + 1))
     else
         echo "SKIPPING batch ${BATCH_NUM} due to server startup failure"
+        CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+        echo "Consecutive failures: ${CONSECUTIVE_FAILURES}/${MAX_CONSECUTIVE_FAILURES}"
+        if [ "$CONSECUTIVE_FAILURES" -ge "$MAX_CONSECUTIVE_FAILURES" ]; then
+            echo ""
+            echo "ABORTING: ${MAX_CONSECUTIVE_FAILURES} consecutive batch failures detected."
+            echo "HPU devices are likely stuck. Remaining batches would also fail."
+            echo "Completed ${SUCCESSFUL_BATCHES}/${#BATCHES[@]} batches successfully."
+            break
+        fi
     fi
 
     # Kill servers before next batch (cleanup clears memory fragmentation)
@@ -231,7 +246,13 @@ for BATCH in "${BATCHES[@]}"; do
 done
 
 echo ""
-echo "Part ${PART_NUM} (tasks ${TASK_RANGE}) complete."
-echo "Use merge_results.py to combine all parts."
-echo "All part results saved to: $LOG_DIR"
-echo "Experiment finished at: $(date)"
+if [ "$SUCCESSFUL_BATCHES" -eq 0 ]; then
+    echo "FAILED: No batches completed successfully. This part produced no usable results."
+    echo "Experiment failed at: $(date)"
+    exit 1
+else
+    echo "Part ${PART_NUM} (tasks ${TASK_RANGE}) complete: ${SUCCESSFUL_BATCHES}/${#BATCHES[@]} batches succeeded."
+    echo "Use merge_results.py to combine all parts."
+    echo "All part results saved to: $LOG_DIR"
+    echo "Experiment finished at: $(date)"
+fi

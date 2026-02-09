@@ -1,25 +1,25 @@
 #!/bin/bash
-#SBATCH --job-name=32b-retail-tc-p3-tau-gaudi
+#SBATCH --job-name=14b-airline-tool-calling-p1-tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:hl225:8
-#SBATCH --cpus-per-task=60
-#SBATCH --mem=384G
-#SBATCH --time=24:00:00
-#SBATCH --output=32b-retail-tc-p3-tau-gaudi_%j.out
-#SBATCH --error=32b-retail-tc-p3-tau-gaudi_%j.err
+#SBATCH --gres=gpu:hl225:3
+#SBATCH --cpus-per-task=24
+#SBATCH --mem=160G
+#SBATCH --time=10:00:00
+#SBATCH --output=14b-airline-tool-calling-p1-tau-gaudi_%j.out
+#SBATCH --error=14b-airline-tool-calling-p1-tau-gaudi_%j.err
 #SBATCH --exclusive
 
 set -e
-SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/32b_retail"
+SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env/14b_airline"
 REPO_ROOT="${SLURM_SUBMIT_DIR}"
 mkdir -p "$SCRIPT_DIR/logs"
-exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p3_${SLURM_JOB_ID}.out") 2>&1
-exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-tool-calling-p3_${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-14b-airline-tool-calling-p1_${SLURM_JOB_ID}.out") 2>&1
+exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-14b-airline-tool-calling-p1_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 32B Retail Tool-Calling Part 3 (Tasks 80-114) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 14B Airline Tool-Calling Part 1/2 (Tasks 0-24) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -29,22 +29,21 @@ export APPTAINER_TMPDIR="/scratch/$USER/apptainer_tmp"
 export HF_HOME="/scratch/$USER/hf_cache"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
-# Dual-server architecture: separate 32B models for user and agent
 USER_MODEL="Qwen/Qwen3-32B"
-AGENT_MODEL="Qwen/Qwen3-32B"
+AGENT_MODEL="Qwen/Qwen3-14B"
 # Dynamic ports based on SLURM job ID to avoid conflicts on shared nodes
 USER_PORT=$((10000 + (SLURM_JOB_ID % 10000)))
 AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
 MAX_MODEL_LEN=40960
-ENV="retail"
+ENV="airline"
 STRATEGY="tool-calling"
 NUM_TRIALS=5
 MAX_CONCURRENCY=2
-PART_NUM=3
-TASK_RANGE="80-114"
+PART_NUM=1
+TASK_RANGE="0-24"
 
-# Batch configuration for Part 3 (tasks 80-114)
-BATCHES=("80 89" "90 99" "100 109" "110 114")
+# Batch configuration for Part 1 (tasks 0-24)
+BATCHES=("0 12" "13 24")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
@@ -121,16 +120,16 @@ for BATCH in "${BATCHES[@]}"; do
 
     cd "$VLLM_CD"
 
-    echo "=== Starting User Model Server (32B on HPUs 0,1,2,3) ==="
+    echo "=== Starting User Model Server (32B) ==="
     USER_LOG="$SCRIPT_DIR/logs/gaudi_vllm_user_32b_${SLURM_JOB_ID}_batch${BATCH_NUM}.log"
-    export APPTAINERENV_HABANA_VISIBLE_DEVICES=0,1,2,3
-    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$USER_MODEL" --host 0.0.0.0 --port $USER_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 4 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$USER_LOG" 2>&1 &
+    export APPTAINERENV_HABANA_VISIBLE_DEVICES=0,1
+    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$USER_MODEL" --host 0.0.0.0 --port $USER_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 2 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$USER_LOG" 2>&1 &
     USER_PID=$!
 
-    echo "=== Starting Agent Model Server (32B on HPUs 4,5,6,7) ==="
-    AGENT_LOG="$SCRIPT_DIR/logs/gaudi_vllm_agent_32b_${SLURM_JOB_ID}_batch${BATCH_NUM}.log"
-    export APPTAINERENV_HABANA_VISIBLE_DEVICES=4,5,6,7
-    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 4 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
+    echo "=== Starting Agent Model Server (14B) ==="
+    AGENT_LOG="$SCRIPT_DIR/logs/gaudi_vllm_agent_14b_${SLURM_JOB_ID}_batch${BATCH_NUM}.log"
+    export APPTAINERENV_HABANA_VISIBLE_DEVICES=2
+    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 1 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.85 --use-padding-aware-scheduling --max-num-seqs 16 --max-num-prefill-seqs 8 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
     AGENT_PID=$!
 
     # Wait for servers with skip-on-failure instead of exit 1
@@ -156,8 +155,8 @@ for BATCH in "${BATCHES[@]}"; do
     fi
 
     if [ "$BATCH_SKIP" = false ]; then
-        echo -n "Waiting for Agent server (32B)..."
-        for i in {1..180}; do
+        echo -n "Waiting for Agent server (14B)..."
+        for i in {1..90}; do
             if check_server "$AGENT_PORT"; then echo " Ready! (${i}0s)"; break; fi
             if ! kill -0 $AGENT_PID 2>/dev/null; then
                 echo " FAILED!"
