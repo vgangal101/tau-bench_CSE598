@@ -7,6 +7,7 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1117 | 8:31 PM | 🔵 | Merge Script Task Range Validation and Rerun Command Generation | ~445 |
 | #1066 | 2:19 PM | 🔵 | 4B Model Scripts Retain Default Memory Configuration | ~347 |
 | #1055 | 2:17 PM | ✅ | Regenerated 91 Experiment Scripts with GPU Memory Configuration | ~409 |
 </claude-mem-context>

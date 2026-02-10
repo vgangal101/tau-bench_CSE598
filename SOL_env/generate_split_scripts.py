@@ -535,10 +535,21 @@ echo "  python ${{SCRIPT_DIR}}/merge_results.py --strategy ${{STRATEGY}}"
 
 
 def generate_merge_results(
-    model_size: str, env: str, num_parts: int, total_tasks: int
+    model_size: str, env: str, num_parts: int, total_tasks: int,
+    parts_config: dict,
 ) -> str:
     """Generate merge_results.py for a directory."""
     agent_model_short = HARDWARE[model_size]["agent_model"].split("/")[-1]
+    dir_name = f"{model_size}_{env}"
+
+    # Build parts task range mapping for the generated script
+    parts_ranges = {}
+    for pn, pcfg in parts_config.items():
+        # Get the full task range from batches (min start, max end)
+        all_starts = [int(s) for s, e in pcfg["batches"]]
+        all_ends = [int(e) for s, e in pcfg["batches"]]
+        parts_ranges[pn] = (min(all_starts), max(all_ends))
+    parts_ranges_str = repr(parts_ranges)
 
     return f'''#!/usr/bin/env python3
 """Merge split {model_size.upper()} {env} experiment results from multiple parts into a single file.
@@ -850,9 +861,53 @@ def main():
     else:
         print("  (Could not determine task coverage from result format)")
 
+    # Map parts to task ranges for rerun suggestions
+    PARTS_TASK_RANGES = {parts_ranges_str}
+
+    def find_parts_for_tasks(missing_tasks):
+        """Find which parts need rerunning based on missing task IDs."""
+        failed_parts = set()
+        for task in missing_tasks:
+            for part_num, (start, end) in PARTS_TASK_RANGES.items():
+                if start <= task <= end:
+                    failed_parts.add(part_num)
+                    break
+        return sorted(failed_parts)
+
+    # Determine pass/fail status
+    is_complete = coverage["total_covered"] == coverage["total_expected"]
+    failed_parts = find_parts_for_tasks(coverage["missing"]) if coverage["missing"] else []
+    passed_parts = sorted(set(PARTS_TASK_RANGES.keys()) - set(failed_parts))
+
+    if failed_parts:
+        print()
+        if passed_parts:
+            print(f"Passed parts: {{passed_parts}}")
+        print(f"Failed parts (missing tasks): {{failed_parts}}")
+        print()
+        print("Rerun commands:")
+        for p in failed_parts:
+            start, end = PARTS_TASK_RANGES[p]
+            print(f"  sbatch SOL_env/{dir_name}/part{{p}}_{{args.strategy}}.sh"
+                  f"    # tasks {{start}}-{{end}}")
+        print()
+        print("After rerunning, re-merge:")
+        print(f"  python SOL_env/{dir_name}/merge_results.py "
+              f"--strategy {{args.strategy}} --dry-run")
+
     if args.dry_run:
         print()
         print("[DRY RUN] Would merge the above results. No output written.")
+        if is_complete:
+            print()
+            print("All tasks covered! After merging, download with:")
+            merged_name = (
+                f"{{args.strategy}}-{agent_model_short}-0.0"
+                f"_range_0-{{args.total_tasks}}_merged.json"
+            )
+            print(f"  scp hehernan@sol.asu.edu:$(pwd)/SOL_env/{dir_name}"
+                  f"/results_gaudi/{env}/{{args.strategy}}/{{merged_name}}"
+                  f" ~/Downloads/")
         sys.exit(0)
 
     # Write output
@@ -870,6 +925,11 @@ def main():
     print()
     print(f"Merged output written to: {{output_path}}")
     print(f"  {{len(files) - len(load_errors)}} valid files -> {{len(all_results)}} results")
+
+    if is_complete:
+        print()
+        print("All tasks covered! Download with:")
+        print(f"  scp hehernan@sol.asu.edu:{{output_path}} ~/Downloads/")
 
 
 if __name__ == "__main__":
@@ -952,7 +1012,7 @@ def main():
 
         # Generate merge_results.py
         merge_path = os.path.join(dir_path, "merge_results.py")
-        merge_content = generate_merge_results(model_size, env, num_parts, total_tasks)
+        merge_content = generate_merge_results(model_size, env, num_parts, total_tasks, parts_config)
         if args.dry_run:
             print(f"  Would create: merge_results.py")
         else:

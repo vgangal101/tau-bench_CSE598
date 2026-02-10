@@ -16,6 +16,7 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1118 | 8:32 PM | 🔵 | 32B Retail Merge Script Contains Task Range Mapping | ~339 |
 | #1064 | 2:19 PM | ✅ | Regenerated All 91 Scripts with Updated 32B Memory Configuration | ~375 |
 | #1055 | 2:17 PM | ✅ | Regenerated 91 Experiment Scripts with GPU Memory Configuration | ~409 |
 | #1044 | 2:14 PM | 🔵 | Distributed Tau Bench Experiment Scripts for 32B Models | ~314 |
