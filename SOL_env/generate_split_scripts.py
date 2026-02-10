@@ -81,6 +81,7 @@ HARDWARE = {
         "agent_max_num_prefill_seqs": 1,
         "agent_wait_iters": 180,
         "gpu_mem_util": "0.80",
+        "max_concurrency": 1,
     },
 }
 
@@ -92,8 +93,8 @@ TIME_LIMITS = {
     ("8b", "retail"): "10:00:00",
     ("14b", "airline"): "10:00:00",
     ("14b", "retail"): "12:00:00",
-    ("32b", "airline"): "10:00:00",
-    ("32b", "retail"): "14:00:00",
+    ("32b", "airline"): "6:00:00",
+    ("32b", "retail"): "8:00:00",
 }
 
 # Batch splits per environment
@@ -103,14 +104,19 @@ AIRLINE_PARTS = {
     2: {"task_range": "25-49", "batches": [("25", "37"), ("38", "49")]},
 }
 
-# Airline 32B: 50 tasks → 4 parts, 1 batch each
+# Airline 32B: 50 tasks → 8 parts, 1 batch each (~6-7 tasks per part)
 # HPU devices can't be reacquired after vLLM shutdown within same SLURM job
 # (synStatus=8 [Device not found]), so each part runs exactly 1 batch and exits.
+# Smaller parts reduce exposure to vLLM server degradation over long runs.
 AIRLINE_32B_PARTS = {
-    1: {"task_range": "0-12", "batches": [("0", "12")]},
-    2: {"task_range": "13-24", "batches": [("13", "24")]},
-    3: {"task_range": "25-37", "batches": [("25", "37")]},
-    4: {"task_range": "38-49", "batches": [("38", "49")]},
+    1: {"task_range": "0-6", "batches": [("0", "6")]},
+    2: {"task_range": "7-12", "batches": [("7", "12")]},
+    3: {"task_range": "13-18", "batches": [("13", "18")]},
+    4: {"task_range": "19-24", "batches": [("19", "24")]},
+    5: {"task_range": "25-31", "batches": [("25", "31")]},
+    6: {"task_range": "32-37", "batches": [("32", "37")]},
+    7: {"task_range": "38-43", "batches": [("38", "43")]},
+    8: {"task_range": "44-49", "batches": [("44", "49")]},
 }
 
 # Retail (4B/8B/14B): 115 tasks → 3 parts, 2 batches each
@@ -120,15 +126,22 @@ RETAIL_PARTS = {
     3: {"task_range": "80-114", "batches": [("80", "99"), ("100", "114")]},
 }
 
-# Retail 32B: 115 tasks → 6 parts, 1 batch each
+# Retail 32B: 115 tasks → 12 parts, 1 batch each (~10 tasks per part)
 # Same HPU device reacquisition issue as airline 32B.
+# Smaller parts reduce exposure to vLLM server degradation over long runs.
 RETAIL_32B_PARTS = {
-    1: {"task_range": "0-19", "batches": [("0", "19")]},
-    2: {"task_range": "20-39", "batches": [("20", "39")]},
-    3: {"task_range": "40-59", "batches": [("40", "59")]},
-    4: {"task_range": "60-79", "batches": [("60", "79")]},
-    5: {"task_range": "80-99", "batches": [("80", "99")]},
-    6: {"task_range": "100-114", "batches": [("100", "114")]},
+    1: {"task_range": "0-9", "batches": [("0", "9")]},
+    2: {"task_range": "10-19", "batches": [("10", "19")]},
+    3: {"task_range": "20-29", "batches": [("20", "29")]},
+    4: {"task_range": "30-39", "batches": [("30", "39")]},
+    5: {"task_range": "40-49", "batches": [("40", "49")]},
+    6: {"task_range": "50-59", "batches": [("50", "59")]},
+    7: {"task_range": "60-69", "batches": [("60", "69")]},
+    8: {"task_range": "70-79", "batches": [("70", "79")]},
+    9: {"task_range": "80-89", "batches": [("80", "89")]},
+    10: {"task_range": "90-99", "batches": [("90", "99")]},
+    11: {"task_range": "100-109", "batches": [("100", "109")]},
+    12: {"task_range": "110-114", "batches": [("110", "114")]},
 }
 
 # What to generate
@@ -212,7 +225,7 @@ MAX_MODEL_LEN=40960
 ENV="{env}"
 STRATEGY="{strategy}"
 NUM_TRIALS=5
-MAX_CONCURRENCY=2
+MAX_CONCURRENCY={hw.get('max_concurrency', 2)}
 PART_NUM={part_num}
 TASK_RANGE="{task_range}"
 

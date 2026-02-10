@@ -7,6 +7,8 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1065 | 2:19 PM | 🔵 | 32B Scripts Not Yet Regenerated with New Configuration | ~354 |
+| #1064 | " | ✅ | Regenerated All 91 Scripts with Updated 32B Memory Configuration | ~375 |
 | #1058 | 2:17 PM | 🔵 | Existing Orphaned Process Cleanup Already Present in Scripts | ~392 |
 | #1056 | " | 🔵 | 32B Airline Scripts Already Use 0.80 GPU Memory Utilization | ~309 |
 | #1055 | " | ✅ | Regenerated 91 Experiment Scripts with GPU Memory Configuration | ~409 |

@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
-#SBATCH --time=14:00:00
+#SBATCH --time=8:00:00
 #SBATCH --output=32b-retail-act-p4-tau-gaudi_%j.out
 #SBATCH --error=32b-retail-act-p4-tau-gaudi_%j.err
 #SBATCH --exclusive
@@ -19,7 +19,7 @@ mkdir -p "$SCRIPT_DIR/logs"
 exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act-p4_${SLURM_JOB_ID}.out") 2>&1
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-act-p4_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 32B Retail Act Part 4/6 (Tasks 60-79) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 32B Retail Act Part 4/12 (Tasks 30-39) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -38,12 +38,12 @@ MAX_MODEL_LEN=40960
 ENV="retail"
 STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=2
+MAX_CONCURRENCY=1
 PART_NUM=4
-TASK_RANGE="60-79"
+TASK_RANGE="30-39"
 
-# Batch configuration for Part 4 (tasks 60-79)
-BATCHES=("60 79")
+# Batch configuration for Part 4 (tasks 30-39)
+BATCHES=("30 39")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"

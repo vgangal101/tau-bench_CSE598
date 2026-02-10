@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1066 | 2:19 PM | 🔵 | 4B Model Scripts Retain Default Memory Configuration | ~347 |
 | #1055 | 2:17 PM | ✅ | Regenerated 91 Experiment Scripts with GPU Memory Configuration | ~409 |
 </claude-mem-context>

@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
-#SBATCH --time=10:00:00
+#SBATCH --time=6:00:00
 #SBATCH --output=32b-airline-react-p4-tau-gaudi_%j.out
 #SBATCH --error=32b-airline-react-p4-tau-gaudi_%j.err
 #SBATCH --exclusive
@@ -19,7 +19,7 @@ mkdir -p "$SCRIPT_DIR/logs"
 exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-react-p4_${SLURM_JOB_ID}.out") 2>&1
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-react-p4_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 32B Airline React Part 4/4 (Tasks 38-49) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 32B Airline React Part 4/8 (Tasks 19-24) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -38,12 +38,12 @@ MAX_MODEL_LEN=40960
 ENV="airline"
 STRATEGY="react"
 NUM_TRIALS=5
-MAX_CONCURRENCY=2
+MAX_CONCURRENCY=1
 PART_NUM=4
-TASK_RANGE="38-49"
+TASK_RANGE="19-24"
 
-# Batch configuration for Part 4 (tasks 38-49)
-BATCHES=("38 49")
+# Batch configuration for Part 4 (tasks 19-24)
+BATCHES=("19 24")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"

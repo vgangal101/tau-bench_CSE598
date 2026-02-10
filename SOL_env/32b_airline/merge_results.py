@@ -277,7 +277,7 @@ def main():
 
     # Check parts coverage
     print(f"Parts found: {sorted(parts_seen.keys())}")
-    expected_parts = set(range(1, 5))
+    expected_parts = set(range(1, 9))
     missing_parts = expected_parts - set(parts_seen.keys())
     if missing_parts:
         print(f"WARNING: Missing parts: {sorted(missing_parts)}")

@@ -13,6 +13,11 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1086 | 5:00 PM | ✅ | Script Generator Updated with Dynamic Concurrency Configuration | ~362 |
+| #1082 | 4:59 PM | ✅ | Reduced 32B Configuration Max Concurrency to 1 | ~315 |
+| #1063 | 2:19 PM | ✅ | Parameterized vLLM Swap Space Configuration | ~386 |
+| #1061 | 2:18 PM | ✅ | 32B GPU Memory Utilization Increased to 0.82 and Swap Space Doubled | ~361 |
+| #1060 | " | ✅ | Increased 32B GPU Memory Utilization and Swap Space Configuration | ~338 |
 | #1053 | 2:17 PM | 🔴 | Added Orphaned HPU Process Cleanup to Prevent Memory Leaks | ~402 |
 | #1052 | 2:16 PM | ✅ | Agent Server GPU Memory Utilization Parameterized | ~367 |
 | #1050 | " | ✅ | Script Generator Parameterized GPU Memory Utilization | ~359 |
