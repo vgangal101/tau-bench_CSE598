@@ -195,7 +195,9 @@ for BATCH in "${BATCHES[@]}"; do
         check_server "$AGENT_PORT" && echo "Agent server still responsive" || echo "Agent server not responding"
 
         # Rename output file to include batch info for clean merging
-        LATEST=$(ls -t "$LOG_DIR"/*.json 2>/dev/null | grep -v "_batch" | grep -v "_merged" | grep -v "_part" | head -1)
+        # Match on expected range to avoid race condition with concurrent parts sharing LOG_DIR
+        EXPECTED_RANGE="range_${START_IDX}-$((END_IDX + 1))"
+        LATEST=$(ls -t "$LOG_DIR"/*.json 2>/dev/null | grep "$EXPECTED_RANGE" | grep -v "_batch" | grep -v "_merged" | grep -v "_part" | head -1)
         if [ -n "$LATEST" ]; then
             BATCH_FILE="${LATEST%.json}_part${PART_NUM}_batch${BATCH_NUM}_job${SLURM_JOB_ID}.json"
             mv "$LATEST" "$BATCH_FILE"
