@@ -93,22 +93,44 @@ def deduplicate_results(results: list) -> tuple[list, int]:
     return deduped, num_removed
 
 
-def validate_coverage(results: list, total_tasks: int = 115) -> dict:
-    """Check which task indices are covered in the results."""
+def validate_coverage(results: list, total_tasks: int = 115, num_trials: int = 5) -> dict:
+    """Check which task indices are covered and trial completeness."""
+    from collections import defaultdict
+
     covered = set()
+    trials_per_task = defaultdict(set)
     for r in results:
         if isinstance(r, dict):
+            task_id = None
             for key in ("task_id", "task_index", "index"):
                 if key in r:
                     try:
-                        covered.add(int(r[key]))
+                        task_id = int(r[key])
+                        covered.add(task_id)
                     except (ValueError, TypeError):
                         pass
                     break
+            if task_id is not None:
+                trial = r.get("trial", 0)
+                trials_per_task[task_id].add(trial)
 
     expected = set(range(total_tasks))
     missing = expected - covered
     extra = covered - expected
+
+    # Trial completeness
+    expected_trials = set(range(num_trials))
+    complete_tasks = sorted(t for t in range(total_tasks)
+                            if trials_per_task.get(t, set()) >= expected_trials)
+    incomplete_tasks = {}
+    for t in range(total_tasks):
+        got = trials_per_task.get(t, set())
+        missing_t = expected_trials - got
+        if missing_t:
+            incomplete_tasks[t] = sorted(missing_t)
+
+    total_trajectories = sum(len(v) for v in trials_per_task.values())
+    expected_trajectories = total_tasks * num_trials
 
     return {
         "covered": sorted(covered),
@@ -116,6 +138,10 @@ def validate_coverage(results: list, total_tasks: int = 115) -> dict:
         "extra": sorted(extra),
         "total_covered": len(covered),
         "total_expected": total_tasks,
+        "complete_tasks": len(complete_tasks),
+        "incomplete_tasks": incomplete_tasks,
+        "total_trajectories": total_trajectories,
+        "expected_trajectories": expected_trajectories,
     }
 
 
@@ -305,6 +331,19 @@ def main():
             print(f"  Missing tasks: {coverage['missing']}")
         if coverage["extra"]:
             print(f"  Extra tasks: {coverage['extra']}")
+        print(
+            f"Trial coverage: {coverage['total_trajectories']}/{coverage['expected_trajectories']} "
+            f"({coverage['complete_tasks']}/{coverage['total_expected']} tasks have all 5 trials)"
+        )
+        if coverage["incomplete_tasks"]:
+            # Show summary of incomplete tasks
+            incomplete = coverage["incomplete_tasks"]
+            num_incomplete = len(incomplete)
+            total_missing_trials = sum(len(v) for v in incomplete.values())
+            print(f"  {num_incomplete} tasks missing {total_missing_trials} trials total")
+            if num_incomplete <= 20:
+                for task_id, missing_trials in sorted(incomplete.items()):
+                    print(f"    Task {task_id}: missing trials {missing_trials}")
     else:
         print("  (Could not determine task coverage from result format)")
 
@@ -321,8 +360,10 @@ def main():
                     break
         return sorted(failed_parts)
 
-    # Determine pass/fail status
-    is_complete = coverage["total_covered"] == coverage["total_expected"]
+    # Determine pass/fail status (requires ALL tasks AND ALL trials)
+    tasks_complete = coverage["total_covered"] == coverage["total_expected"]
+    trials_complete = coverage["total_trajectories"] == coverage["expected_trajectories"]
+    is_complete = tasks_complete and trials_complete
     failed_parts = find_parts_for_tasks(coverage["missing"]) if coverage["missing"] else []
     passed_parts = sorted(set(PARTS_TASK_RANGES.keys()) - set(failed_parts))
 
@@ -341,21 +382,45 @@ def main():
         print("After rerunning, re-merge:")
         print(f"  python SOL_env/32b_retail/merge_results.py "
               f"--strategy {args.strategy} --dry-run")
+    elif not trials_complete:
+        # All tasks have at least 1 trial but not all 5
+        print()
+        print(f"WARNING: All tasks present but only "
+              f"{coverage['total_trajectories']}/{coverage['expected_trajectories']} "
+              f"trials complete.")
+        # Find which parts have incomplete trials
+        incomplete_parts = set()
+        for task_id in coverage["incomplete_tasks"]:
+            for part_num, (start, end) in PARTS_TASK_RANGES.items():
+                if start <= task_id <= end:
+                    incomplete_parts.add(part_num)
+                    break
+        if incomplete_parts:
+            print(f"Parts with incomplete trials: {sorted(incomplete_parts)}")
+            print()
+            print("Rerun commands to fill missing trials:")
+            for p in sorted(incomplete_parts):
+                start, end = PARTS_TASK_RANGES[p]
+                print(f"  sbatch SOL_env/32b_retail/part{p}_{args.strategy}.sh"
+                      f"    # tasks {start}-{end}")
 
     if args.dry_run:
         print()
-        print("[DRY RUN] Would merge the above results. No output written.")
         if is_complete:
-            username = os.getenv("USER", "your_username")
-            print()
-            print("All tasks covered! After merging, download with:")
+            print("[DRY RUN] All tasks and trials complete! After merging, download with:")
             merged_name = (
                 f"{args.strategy}-Qwen3-32B-0.0"
                 f"_range_0-{args.total_tasks}_merged.json"
             )
+            username = os.getenv("USER", "your_username")
             print(f"  scp {username}@sol.asu.edu:$(pwd)/SOL_env/32b_retail"
                   f"/results_gaudi/retail/{args.strategy}/{merged_name}"
                   f" ~/Downloads/")
+        else:
+            print("[DRY RUN] Would merge the above results. No output written.")
+            if tasks_complete:
+                print(f"NOTE: All {coverage['total_expected']} tasks present but "
+                      f"only {coverage['complete_tasks']} have all 5 trials.")
         sys.exit(0)
 
     # Write output
@@ -377,7 +442,15 @@ def main():
     if is_complete:
         username = os.getenv("USER", "your_username")
         print()
-        print("All tasks covered! Download with:")
+        print("All tasks and trials complete! Download with:")
+        print(f"  scp {username}@sol.asu.edu:{output_path} ~/Downloads/")
+    elif tasks_complete:
+        username = os.getenv("USER", "your_username")
+        print()
+        print(f"NOTE: All {coverage['total_expected']} tasks present but "
+              f"only {coverage['complete_tasks']} have all 5 trials "
+              f"({coverage['total_trajectories']}/{coverage['expected_trajectories']} trajectories).")
+        print("Merging anyway. Download with:")
         print(f"  scp {username}@sol.asu.edu:{output_path} ~/Downloads/")
 
 
