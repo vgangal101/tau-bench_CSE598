@@ -67,6 +67,7 @@ class EnvRunResult(BaseModel):
     info: Dict[str, Any]
     traj: List[Dict[str, Any]]
     trial: int
+    total_cost: Optional[float] = None
 
 
 class RunConfig(BaseModel):
