@@ -144,7 +144,8 @@ def start_vllm_server(
 ):
     """Start a vLLM server as a subprocess."""
     cmd = [
-        sys.executable, "-m", "vllm.entrypoints.openai.api_server",
+        
+        'vllm', 'serve',
         "--model", server_cfg.model,
         "--host", "0.0.0.0",
         "--port", str(server_cfg.port),
@@ -239,7 +240,9 @@ def main(vllm: VllmConfig = VllmConfig(), benchmark: BenchmarkConfig = Benchmark
 
     # ── Step 3: Wait for both servers to be ready ──
     user_url = f"http://localhost:{vllm.user_server.port}"
+    print('User Simulator URL:', user_url)
     agent_url = f"http://localhost:{vllm.agent_server.port}"
+    print('Agent URL:', agent_url)
 
     if not wait_for_server(user_url, "User Simulator", max_wait_seconds=vllm.server_ready_timeout):
         if user_proc.poll() is not None:
