@@ -905,7 +905,8 @@ def main():
                 f"{{args.strategy}}-{agent_model_short}-0.0"
                 f"_range_0-{{args.total_tasks}}_merged.json"
             )
-            print(f"  scp hehernan@sol.asu.edu:$(pwd)/SOL_env/{dir_name}"
+            username = os.getenv("USER", "your_username")
+            print(f"  scp {{username}}@sol.asu.edu:$(pwd)/SOL_env/{dir_name}"
                   f"/results_gaudi/{env}/{{args.strategy}}/{{merged_name}}"
                   f" ~/Downloads/")
         sys.exit(0)
@@ -927,9 +928,10 @@ def main():
     print(f"  {{len(files) - len(load_errors)}} valid files -> {{len(all_results)}} results")
 
     if is_complete:
+        username = os.getenv("USER", "your_username")
         print()
         print("All tasks covered! Download with:")
-        print(f"  scp hehernan@sol.asu.edu:{{output_path}} ~/Downloads/")
+        print(f"  scp {{username}}@sol.asu.edu:{{output_path}} ~/Downloads/")
 
 
 if __name__ == "__main__":
