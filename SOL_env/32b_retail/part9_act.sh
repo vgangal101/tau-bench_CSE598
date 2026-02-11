@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=32b-retail-act-p9-tau-gaudi
 #SBATCH --partition=gaudi
-#SBATCH --qos=class_gaudi
-#SBATCH --account=class_cse59827694spring2026
+#SBATCH --qos=public
+#SBATCH --account=grp_jzou22
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
