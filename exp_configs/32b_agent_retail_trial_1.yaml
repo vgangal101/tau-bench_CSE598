@@ -4,7 +4,7 @@ vllm:
     port: 8000
     max_model_len: 32768
     gpu_memory_utilization: 0.90
-    tensor_parallel_size: 2
+    tensor_parallel_size: 1
     quantization: null
     enforce_eager: true
     trust_remote_code: true
@@ -14,7 +14,7 @@ vllm:
     port: 8001
     max_model_len: 32768
     gpu_memory_utilization: 0.90
-    tensor_parallel_size: 2
+    tensor_parallel_size: 1
     quantization: null
     enforce_eager: true
     trust_remote_code: true
@@ -33,7 +33,7 @@ benchmark:
   end_index: -1
   task_ids: null
   log_dir: results
-  max_concurrency: 20
+  max_concurrency: 1
   seed: 10
   shuffle: 0
   user_strategy: llm
