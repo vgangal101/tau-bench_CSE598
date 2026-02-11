@@ -16,7 +16,7 @@ This guide explains how to run tau-bench experiments on Intel Gaudi2 (HPU) accel
 ## Prerequisites
 
 1. **SOL Cluster Access**: You need an account on the ASU SOL cluster
-2. **SLURM Account**: `class_cse59827694spring2026`
+2. **SLURM Account**: `grp_jzou22`
 3. **tau-bench Environment**: Created automatically if missing
 
 ## Step-by-Step: Running an Experiment
@@ -290,7 +290,7 @@ For 32B specifically, the Habana driver cannot reacquire HPU devices after vLLM 
 | MAX_CONCURRENCY | 2 |
 | NUM_TRIALS | 5 |
 | Partition | gaudi |
-| QOS | class_gaudi |
+| QOS | public |
 
 ### SLURM Time Limits (Per Part)
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=gaudi-check
 #SBATCH --partition=gaudi
-#SBATCH --qos=class_gaudi
+#SBATCH --qos=public
 #SBATCH --gres=gpu:hl225:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=30G
