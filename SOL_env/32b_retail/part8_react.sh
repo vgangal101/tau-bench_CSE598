@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
-#SBATCH --time=8:00:00
+#SBATCH --time=20:00:00
 #SBATCH --output=32b-retail-react-p8-tau-gaudi_%j.out
 #SBATCH --error=32b-retail-react-p8-tau-gaudi_%j.err
 #SBATCH --exclusive

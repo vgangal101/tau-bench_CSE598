@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:hl225:3
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=160G
-#SBATCH --time=8:00:00
+#SBATCH --time=14:00:00
 #SBATCH --output=8b-airline-tool-calling-p2-tau-gaudi_%j.out
 #SBATCH --error=8b-airline-tool-calling-p2-tau-gaudi_%j.err
 #SBATCH --exclusive

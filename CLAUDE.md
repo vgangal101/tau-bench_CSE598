@@ -505,12 +505,12 @@ All Gaudi scripts use these settings for the **User server (32B)**:
 |------------|-------|---------------|
 | 4B airline | 2 | 8:00:00 |
 | 4B retail | 3 | 10:00:00 |
-| 8B airline | 2 | 8:00:00 |
-| 8B retail | 3 | 10:00:00 |
+| 8B airline | 2 | 14:00:00 |
+| 8B retail | 3 | 14:00:00 |
 | 14B airline | 2 | 10:00:00 |
 | 14B retail | 3 | 12:00:00 |
 | 32B airline | 4 | 10:00:00 |
-| 32B retail | 6 | 14:00:00 |
+| 32B retail | 12 | 20:00:00 |
 
 #### Split Parts Configuration
 
