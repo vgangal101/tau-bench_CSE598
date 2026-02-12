@@ -46,8 +46,8 @@ class AnyscaleModel(ChatModel):
             api_key = os.getenv(API_KEY_ENV_VAR)
             if api_key is None:
                 raise ValueError(f"{API_KEY_ENV_VAR} environment variable is not set")
-        self.client = OpenAI(api_key=api_key, base_url=BASE_URL)
-        self.async_client = AsyncOpenAI(api_key=api_key, base_url=BASE_URL)
+        self.client = OpenAI(api_key=api_key, base_url=BASE_URL, timeout=3600.0)
+        self.async_client = AsyncOpenAI(api_key=api_key, base_url=BASE_URL, timeout=3600.0)
         self.temperature = temperature
 
     def generate_message(

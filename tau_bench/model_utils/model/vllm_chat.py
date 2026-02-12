@@ -65,10 +65,12 @@ class VLLMChatModel(ChatModel):
         self.client = OpenAI(
             base_url=base_url,
             api_key=api_key,
+            timeout=3600.0,  # 1 hour timeout for long-running tasks
         )
         self.async_client = AsyncOpenAI(
             base_url=base_url,
             api_key=api_key,
+            timeout=3600.0,  # 1 hour timeout for long-running tasks
         )
         self.temperature = temperature
         self.price_per_input_token = (
