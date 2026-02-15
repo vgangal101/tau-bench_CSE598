@@ -43,39 +43,72 @@ class RLMAgent(Agent):
             max_depth=max_depth,
         )
 
-    def _parse_action(self, response_text: str) -> Action:
-        # Try to find a JSON object in the response
-        # First try: find JSON between braces
-        match = re.search(r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"kwargs"\s*:\s*\{[^}]*\}[^}]*\}', response_text)
+    def _parse_actions(self, response_text: str) -> List[Action]:
+        """Parse one or more actions from the RLM response.
+
+        Supports both batched (JSON array) and single (JSON object) formats.
+        """
+        text = response_text.strip()
+
+        # Try 1: parse as JSON array of actions
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                actions = []
+                for item in parsed:
+                    if isinstance(item, dict) and "name" in item and "kwargs" in item:
+                        actions.append(Action(name=item["name"], kwargs=item["kwargs"]))
+                if actions:
+                    return actions
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+        # Try 2: find a JSON array in the response
+        match = re.search(r'\[.*\]', text, re.DOTALL)
         if match:
             try:
                 parsed = json.loads(match.group())
-                return Action(name=parsed["name"], kwargs=parsed["kwargs"])
+                if isinstance(parsed, list):
+                    actions = []
+                    for item in parsed:
+                        if isinstance(item, dict) and "name" in item and "kwargs" in item:
+                            actions.append(Action(name=item["name"], kwargs=item["kwargs"]))
+                    if actions:
+                        return actions
             except (json.JSONDecodeError, KeyError):
                 pass
 
-        # Second try: find any JSON object with "name" key
-        for match in re.finditer(r'\{[^{}]*\{[^{}]*\}[^{}]*\}', response_text):
+        # Try 3: find a single JSON object with name+kwargs
+        match = re.search(r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"kwargs"\s*:\s*\{[^}]*\}[^}]*\}', text)
+        if match:
+            try:
+                parsed = json.loads(match.group())
+                return [Action(name=parsed["name"], kwargs=parsed["kwargs"])]
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        # Try 4: find any nested JSON object with name+kwargs
+        for match in re.finditer(r'\{[^{}]*\{[^{}]*\}[^{}]*\}', text):
             try:
                 parsed = json.loads(match.group())
                 if "name" in parsed and "kwargs" in parsed:
-                    return Action(name=parsed["name"], kwargs=parsed["kwargs"])
+                    return [Action(name=parsed["name"], kwargs=parsed["kwargs"])]
             except (json.JSONDecodeError, KeyError):
                 continue
 
-        # Third try: parse the whole response as JSON
+        # Try 5: parse the whole response as a single JSON object
         try:
-            parsed = json.loads(response_text.strip())
-            if "name" in parsed and "kwargs" in parsed:
-                return Action(name=parsed["name"], kwargs=parsed["kwargs"])
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and "name" in parsed and "kwargs" in parsed:
+                return [Action(name=parsed["name"], kwargs=parsed["kwargs"])]
         except (json.JSONDecodeError, KeyError):
             pass
 
         # Fallback: treat entire response as a customer-facing message
-        return Action(
+        return [Action(
             name=RESPOND_ACTION_NAME,
-            kwargs={"content": response_text.strip()},
-        )
+            kwargs={"content": text},
+        )]
 
     def solve(
         self, env: Env, task_index: Optional[int] = None, max_num_steps: int = 30
@@ -85,6 +118,7 @@ class RLMAgent(Agent):
         obs = env_reset_res.observation
         info = env_reset_res.info.model_dump()
         reward = 0.0
+        steps_used = 0
 
         conversation_history: List[Dict[str, str]] = [
             {"role": "customer", "content": obs},
@@ -94,43 +128,49 @@ class RLMAgent(Agent):
             {"role": "user", "content": obs},
         ]
 
-        for _ in range(max_num_steps):
+        done = False
+        while steps_used < max_num_steps and not done:
             prompt = self.prompt_builder.build_prompt(conversation_history)
             result = self.rlm.completion(prompt)
             response_text = result.response
 
-            action = self._parse_action(response_text)
-            env_response = env.step(action)
-            reward = env_response.reward
-            info = {**info, **env_response.info.model_dump()}
+            actions = self._parse_actions(response_text)
+            messages.append({"role": "assistant", "content": response_text})
 
-            if action.name != RESPOND_ACTION_NAME:
-                # Tool call
-                conversation_history.append(
-                    {"role": "agent", "content": f"Tool call: {action.name}({json.dumps(action.kwargs)})"}
-                )
-                conversation_history.append(
-                    {"role": "tool_result", "content": env_response.observation}
-                )
-                messages.extend([
-                    {"role": "assistant", "content": response_text},
-                    {"role": "user", "content": f"Tool result ({action.name}): {env_response.observation}"},
-                ])
-            else:
-                # Response to customer
-                conversation_history.append(
-                    {"role": "agent", "content": action.kwargs.get("content", response_text)}
-                )
-                conversation_history.append(
-                    {"role": "customer", "content": env_response.observation}
-                )
-                messages.extend([
-                    {"role": "assistant", "content": action.kwargs.get("content", response_text)},
-                    {"role": "user", "content": env_response.observation},
-                ])
+            # Execute all actions from this RLM call
+            for action in actions:
+                if steps_used >= max_num_steps:
+                    break
 
-            if env_response.done:
-                break
+                env_response = env.step(action)
+                reward = env_response.reward
+                info = {**info, **env_response.info.model_dump()}
+                steps_used += 1
+
+                if action.name != RESPOND_ACTION_NAME:
+                    conversation_history.append(
+                        {"role": "agent", "content": f"Tool call: {action.name}({json.dumps(action.kwargs)})"}
+                    )
+                    conversation_history.append(
+                        {"role": "tool_result", "content": env_response.observation}
+                    )
+                    messages.append(
+                        {"role": "user", "content": f"Tool result ({action.name}): {env_response.observation}"}
+                    )
+                else:
+                    conversation_history.append(
+                        {"role": "agent", "content": action.kwargs.get("content", response_text)}
+                    )
+                    conversation_history.append(
+                        {"role": "customer", "content": env_response.observation}
+                    )
+                    messages.append(
+                        {"role": "user", "content": env_response.observation}
+                    )
+
+                if env_response.done:
+                    done = True
+                    break
 
         return SolveResult(
             reward=reward,

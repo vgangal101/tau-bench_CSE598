@@ -46,11 +46,23 @@ class PromptBuilder:
 
         sections.append("\n# Instructions")
         sections.append(
-            'Decide your next action. Output ONLY a JSON object in one of these formats:\n'
-            '- To call a tool: {"name": "<tool_name>", "kwargs": {<arguments>}}\n'
-            '- To respond to the customer: {"name": "respond", "kwargs": {"content": "<your message>"}}\n'
-            "\n"
-            "Output the JSON and nothing else."
+            'Decide your next action(s). You can BATCH multiple tool calls in a single turn to '
+            'minimize round trips. Output a JSON array of actions:\n'
+            '\n'
+            'For multiple tool calls (PREFERRED when you need several lookups):\n'
+            '[{"name": "<tool_1>", "kwargs": {<args>}}, {"name": "<tool_2>", "kwargs": {<args>}}, ...]\n'
+            '\n'
+            'For a single action:\n'
+            '[{"name": "<tool_name>", "kwargs": {<arguments>}}]\n'
+            '\n'
+            'To respond to the customer (must be the ONLY action, never batched with tool calls):\n'
+            '[{"name": "respond", "kwargs": {"content": "<your message>"}}]\n'
+            '\n'
+            'IMPORTANT: Batch as many independent tool calls as possible in one turn. For example, '
+            'if you need to look up a user AND check an order, do BOTH in one turn instead of '
+            'separate turns. Only respond to the customer when you have all the information needed.\n'
+            '\n'
+            'Output the JSON array and nothing else.'
         )
 
         return "\n".join(sections)
