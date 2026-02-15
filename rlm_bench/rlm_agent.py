@@ -129,12 +129,33 @@ class RLMAgent(Agent):
         ]
 
         done = False
+        rlm_call_num = 0
         while steps_used < max_num_steps and not done:
+            rlm_call_num += 1
             prompt = self.prompt_builder.build_prompt(conversation_history)
+
+            print(f"\n{'='*80}")
+            print(f"RLM CALL #{rlm_call_num} (steps used: {steps_used}/{max_num_steps})")
+            print(f"{'='*80}")
+            print(f"\n--- PROMPT SENT TO RLM ({len(prompt)} chars) ---")
+            # Show last 1500 chars to avoid flooding terminal with the full wiki
+            if len(prompt) > 2000:
+                print(f"  [... first {len(prompt)-1500} chars truncated ...]")
+                print(prompt[-1500:])
+            else:
+                print(prompt)
+
             result = self.rlm.completion(prompt)
             response_text = result.response
 
+            print(f"\n--- RLM RESPONSE ---")
+            print(response_text)
+
             actions = self._parse_actions(response_text)
+            print(f"\n--- PARSED ACTIONS ({len(actions)}) ---")
+            for i, a in enumerate(actions):
+                print(f"  [{i+1}] {a.name}({json.dumps(a.kwargs)})")
+
             messages.append({"role": "assistant", "content": response_text})
 
             # Execute all actions from this RLM call
@@ -147,7 +168,9 @@ class RLMAgent(Agent):
                 info = {**info, **env_response.info.model_dump()}
                 steps_used += 1
 
+                print(f"\n--- ENV STEP {steps_used}: {action.name} ---")
                 if action.name != RESPOND_ACTION_NAME:
+                    print(f"  Tool result: {env_response.observation[:500]}")
                     conversation_history.append(
                         {"role": "agent", "content": f"Tool call: {action.name}({json.dumps(action.kwargs)})"}
                     )
@@ -158,6 +181,8 @@ class RLMAgent(Agent):
                         {"role": "user", "content": f"Tool result ({action.name}): {env_response.observation}"}
                     )
                 else:
+                    print(f"  Agent says: {action.kwargs.get('content', response_text)[:500]}")
+                    print(f"  Customer says: {env_response.observation[:500]}")
                     conversation_history.append(
                         {"role": "agent", "content": action.kwargs.get("content", response_text)}
                     )
@@ -167,6 +192,8 @@ class RLMAgent(Agent):
                     messages.append(
                         {"role": "user", "content": env_response.observation}
                     )
+
+                print(f"  done={env_response.done}, reward={env_response.reward}")
 
                 if env_response.done:
                     done = True
