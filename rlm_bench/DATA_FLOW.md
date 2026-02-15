@@ -9,18 +9,18 @@
 │  CLI Args ──► RLMRunConfig ──► run(config)                                  │
 │                                                                             │
 │  ┌─────────────────────┐    ┌──────────────────────┐                        │
-│  │ get_env("retail")   │    │ RLMAgent(             │                        │
-│  │  ├─ 16 tools        │    │   backend=openrouter, │                        │
-│  │  ├─ wiki (policies) │    │   model=qwen3-8b,     │                        │
-│  │  └─ user simulator  │    │   max_depth=2          │                        │
-│  │    (Qwen3-32B)      │    │ )                     │                        │
-│  └─────────┬───────────┘    └──────────┬────────────┘                        │
-│            │                           │                                     │
-│            ▼                           ▼                                     │
-│  ┌─────────────────────────────────────────────────────────────────────┐     │
-│  │                    agent.solve(env, task_index)                      │     │
-│  │                                                                     │     │
-│  │  ┌──────────────────────────────────────────────────────────────┐   │     │
+│  │ get_env("retail")   │    │ RLMAgent(            │                       │
+│  │  ├─ 16 tools        │    │   backend=openrouter,│                       │
+│  │  ├─ wiki (policies) │    │   model=qwen3-8b,    │                       │
+│  │  └─ user simulator  │    │   max_depth=2        │                       │
+│  │    (Qwen3-32B)      │    │ )                    │                       │
+│  └─────────┬───────────┘    └──────────┬───────────┘                       │
+│            │                           │                                    │
+│            ▼                           ▼                                    │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    agent.solve(env, task_index)                     │    │
+│  │                                                                     │    │
+│  │  ┌──────────────────────────────────────────────────────────────┐   │    │
 │  │  │ Step 0: env.reset(task_index)                                 │   │     │
 │  │  │                                                               │   │     │
 │  │  │  Task Instruction ──► User Simulator LLM ──► Initial Message  │   │     │
