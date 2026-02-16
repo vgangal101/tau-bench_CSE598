@@ -10,6 +10,15 @@ from tau_bench.types import Action, SolveResult, RESPOND_ACTION_NAME
 
 from rlm_bench.prompt_builder import PromptBuilder
 
+# Patterns that indicate RLM REPL internal errors (should never reach the customer)
+_REPL_ERROR_PATTERNS = [
+    "Error: Variable",
+    "not found. Available variables:",
+    "You must create and assign a variable BEFORE calling FINAL_VAR",
+]
+
+MAX_RLM_RETRIES = 2
+
 
 class RLMAgent(Agent):
     def __init__(
@@ -42,6 +51,11 @@ class RLMAgent(Agent):
             environment=environment,
             max_depth=max_depth,
         )
+
+    @staticmethod
+    def _is_repl_error(response_text: str) -> bool:
+        """Check if the RLM response is an internal REPL error, not a real answer."""
+        return any(pattern in response_text for pattern in _REPL_ERROR_PATTERNS)
 
     def _parse_actions(self, response_text: str) -> List[Action]:
         """Parse one or more actions from the RLM response.
@@ -145,8 +159,28 @@ class RLMAgent(Agent):
             else:
                 print(prompt)
 
-            result = self.rlm.completion(prompt)
-            response_text = result.response
+            # Retry loop: if RLM returns a REPL error, retry up to MAX_RLM_RETRIES times
+            response_text = None
+            for attempt in range(1 + MAX_RLM_RETRIES):
+                result = self.rlm.completion(prompt)
+                response_text = result.response
+
+                if self._is_repl_error(response_text):
+                    print(f"\n--- RLM REPL ERROR (attempt {attempt+1}/{1+MAX_RLM_RETRIES}) ---")
+                    print(f"  {response_text[:200]}")
+                    if attempt < MAX_RLM_RETRIES:
+                        print("  Retrying...")
+                        continue
+                    else:
+                        print("  Max retries reached, skipping this turn.")
+                        break
+                else:
+                    break
+
+            # If all attempts returned REPL errors, skip this turn entirely
+            if self._is_repl_error(response_text):
+                print("  [SKIPPED — REPL error not sent to customer]")
+                continue
 
             print(f"\n--- RLM RESPONSE ---")
             print(response_text)

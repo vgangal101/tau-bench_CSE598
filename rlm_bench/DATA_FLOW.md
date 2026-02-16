@@ -9,26 +9,26 @@
 │  CLI Args ──► RLMRunConfig ──► run(config)                                  │
 │                                                                             │
 │  ┌─────────────────────┐    ┌──────────────────────┐                        │
-│  │ get_env("retail")   │    │ RLMAgent(            │                       │
-│  │  ├─ 16 tools        │    │   backend=openrouter,│                       │
-│  │  ├─ wiki (policies) │    │   model=qwen3-8b,    │                       │
-│  │  └─ user simulator  │    │   max_depth=2        │                       │
-│  │    (Qwen3-32B)      │    │ )                    │                       │
-│  └─────────┬───────────┘    └──────────┬───────────┘                       │
+│  │ get_env("retail")   │    │ RLMAgent(            │                        │
+│  │  ├─ 16 tools        │    │   backend=openrouter │                        │
+│  │  ├─ wiki (policies) │    │   model=qwen3-8b     │                        │
+│  │  └─ user simulator  │    │   max_depth=2        │                        │
+│  │    (Qwen3-32B)      │    │ )                    │                        │
+│  └─────────┬───────────┘    └──────────┬───────────┘                        │
 │            │                           │                                    │
 │            ▼                           ▼                                    │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                    agent.solve(env, task_index)                     │    │
 │  │                                                                     │    │
 │  │  ┌──────────────────────────────────────────────────────────────┐   │    │
-│  │  │ Step 0: env.reset(task_index)                                 │   │     │
-│  │  │                                                               │   │     │
-│  │  │  Task Instruction ──► User Simulator LLM ──► Initial Message  │   │     │
-│  │  │        (hidden)        (Qwen3-32B)         "Hi, I need to     │   │     │
-│  │  │                                             change my order"   │   │     │
-│  │  └──────────────────────────┬───────────────────────────────────┘   │     │
-│  │                             │                                       │     │
-│  │                             ▼                                       │     │
+│  │  │ Step 0: env.reset(task_index)                                 │   │    │
+│  │  │                                                               │   │    │
+│  │  │  Task Instruction ──► User Simulator LLM ──► Initial Message  │   │    │
+│  │  │        (hidden)        (Qwen3-32B)         "Hi, I need to     │   │    │
+│  │  │                                             change my order"  │   │    │
+│  │  └──────────────────────────┬───────────────────────────────────┘   │    │
+│  │                             │                                       │    │
+│  │                             ▼                                       │    │
 │  │  ┌──────────────────────────────────────────────────────────────┐   │     │
 │  │  │ MAIN LOOP (while steps < 30 and not done)                    │   │     │
 │  │  │                                                               │   │     │
@@ -64,7 +64,7 @@
 │  │  │  │  ┌──────────── RLM REPL Sandbox ────────────────────┐  │   │   │     │
 │  │  │  │  │                                                  │  │   │   │     │
 │  │  │  │  │  Iteration 1:                                    │  │   │   │     │
-│  │  │  │  │    LLM generates Python code ◄── Qwen3-8B       │  │   │   │     │
+│  │  │  │  │    LLM generates Python code ◄── Qwen3-8B        │  │   │   │     │
 │  │  │  │  │    ```python                     (OpenRouter)    │  │   │   │     │
 │  │  │  │  │    # I need user + order info                    │  │   │   │     │
 │  │  │  │  │    user = llm_query("extract user_id")           │  │   │   │     │
@@ -142,12 +142,12 @@
 │  │  └───────────────────────────────────────────────────────────────┘   │     │
 │  │                             │                                       │     │
 │  │                             ▼                                       │     │
-│  │  ┌──────────────────────────────────────────────────────────────┐   │     │
-│  │  │ calculate_reward()                                            │   │     │
-│  │  │  Compare DB state after agent actions vs ground truth         │   │     │
-│  │  │  reward = 1.0 (correct) or 0.0 (incorrect)                   │   │     │
-│  │  └──────────────────────────────────────────────────────────────┘   │     │
-│  └─────────────────────────────────────────────────────────────────────┘     │
+│  │  ┌──────────────────────────────────────────────────────────────┐   │    │
+│  │  │ calculate_reward()                                           │   │    │
+│  │  │  Compare DB state after agent actions vs ground truth        │   │    │
+│  │  │  reward = 1.0 (correct) or 0.0 (incorrect)                   │   │    │
+│  │  └──────────────────────────────────────────────────────────────┘   │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 │  Results ──► checkpoint JSON ──► display_metrics() ──► Pass^k score         │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -205,30 +205,94 @@ RLM (batched):
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        rlm_bench/ (NEW)                          │
-│  ┌────────────┐  ┌───────────────┐  ┌────────────────────────┐  │
-│  │ run.py     │  │ prompt_builder│  │ rlm_agent.py           │  │
-│  │ CLI entry  │  │ .py           │  │ _parse_actions()       │  │
-│  │ point      │  │ builds text   │  │ solve() with batching  │  │
-│  │            │  │ prompts with  │  │                        │  │
-│  │            │  │ batch instrs  │  │ Uses: rlm.completion() │  │
-│  └─────┬──────┘  └───────────────┘  └───────────┬────────────┘  │
-│        │                                         │               │
-├────────┼─────────────────────────────────────────┼───────────────┤
-│        │          tau_bench/ (UNTOUCHED)          │               │
+│  ┌────────────┐  ┌───────────────┐  ┌────────────────────────┐   │
+│  │ run.py     │  │ prompt_builder│  │ rlm_agent.py           │   │
+│  │ CLI entry  │  │ .py           │  │ _parse_actions()       │   │
+│  │ point      │  │ builds text   │  │ solve() with batching  │   │
+│  │            │  │ prompts with  │  │                        │   │
+│  │            │  │ batch instrs  │  │ Uses: rlm.completion() │   │
+│  └─────┬──────┘  └───────────────┘  └───────────┬────────────┘   │
+│        │                                        │                │
+├────────┼────────────────────────────────────────┼────────────────┤
+│        │          tau_bench/ (UNTOUCHED)        │              │
 │        ▼                                         ▼               │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌────────┐         │
-│  │ get_env()│  │ user.py  │  │ tools     │  │ types  │         │
-│  │ envs/    │  │ simulator│  │ (retail   │  │ Action │         │
-│  │          │  │ (litellm)│  │  DB ops)  │  │ Solve  │         │
-│  └──────────┘  └──────────┘  └───────────┘  │ Result │         │
-│                                              └────────┘         │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌────────┐          │
+│  │ get_env()│  │ user.py  │  │ tools     │  │ types  │          │
+│  │ envs/    │  │ simulator│  │ (retail   │  │ Action │          │
+│  │          │  │ (litellm)│  │  DB ops)  │  │ Solve  │          │
+│  └──────────┘  └──────────┘  └───────────┘  │ Result │          │
+│                                             └────────┘          │
 ├─────────────────────────────────────────────────────────────────┤
-│                     External Services                            │
+│                     External Services                           │
 │  ┌──────────────────────┐    ┌──────────────────────┐           │
-│  │ OpenRouter            │    │ OpenRouter            │           │
+│  │ OpenRouter           │    │ OpenRouter           │           │
 │  │ Qwen3-8B (agent)     │    │ Qwen3-32B (user sim) │           │
-│  │ via RLM's openai     │    │ via litellm           │           │
-│  │ client               │    │                       │           │
+│  │ via RLM's openai     │    │ via litellm          │           │
+│  │ client               │    │                      │           │
 │  └──────────────────────┘    └──────────────────────┘           │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## Changelog
+
+### v2 — REPL Error Filtering + Prompt Overhaul (2026-02-15)
+
+**Problem**: First test run (3 tasks, 0/3 passed) revealed two critical issues:
+
+1. **RLM REPL errors leaked to the customer** — When the model's Python code in the
+   REPL referenced undefined variables, `FINAL_VAR()` failed and the error string
+   (e.g., `"Error: Variable 'exchange_initiated' not found"`) became `result.response`,
+   which got parsed as a `respond` action and sent directly to the user simulator.
+
+2. **Agent never executed mutation tools** — The agent gathered all necessary data
+   (user details, order details, product variants) but never called
+   `exchange_delivered_order_items` or `return_delivered_order_items`. It would
+   describe what it *would* do instead of actually doing it.
+
+**Fix 1 — REPL error retry** (`rlm_agent.py`):
+- Added `_is_repl_error()` that detects known REPL error patterns:
+  - `"Error: Variable"`
+  - `"not found. Available variables:"`
+  - `"You must create and assign a variable BEFORE calling FINAL_VAR"`
+- Added retry loop: on REPL error, retry `rlm.completion()` up to 2 more times
+- If all 3 attempts fail, the turn is **skipped** (no action sent to env)
+
+```
+rlm.completion(prompt)
+       │
+       ▼
+  REPL error? ──yes──► retry (up to 2x) ──still error──► skip turn
+       │
+       no
+       ▼
+  _parse_actions() ──► env.step()
+```
+
+**Fix 2 — Stronger prompt** (`prompt_builder.py`):
+- Rewritten instructions section with numbered rules:
+  - Rule 1: Batch independent tool calls (with concrete example)
+  - Rule 2: Single tool call format
+  - Rule 3: Respond only when you have all info
+  - Rule 4: **"EXECUTE mutation tools when you have the parameters.
+    Do NOT just describe what you would do — actually call the tool."**
+  - Rule 5: **"When you get order IDs, batch-fetch ALL order details in one turn."**
+- Ends with: "Output ONLY the JSON array. No explanations, no markdown, no commentary."
+
+### v1 — Batched Tool Calling (2026-02-15)
+
+**Changes from initial single-action implementation:**
+
+- `_parse_action()` renamed to `_parse_actions()`, now returns `List[Action]`
+- Parses JSON arrays first (batched), falls back to single JSON objects
+- `solve()` loop executes all actions from one RLM call before making the next
+- Prompt instructs model to batch independent tool calls in one turn
+- Added verbose logging: prints prompt, RLM response, parsed actions, env results
+
+### v0 — Initial Implementation (2026-02-14)
+
+- `rlm_bench/__init__.py` — Package init, exports RLMAgent
+- `rlm_bench/config.py` — RLMRunConfig extending RunConfig (adds rlm_max_depth, rlm_environment)
+- `rlm_bench/prompt_builder.py` — Formats wiki + tools + history into text prompt
+- `rlm_bench/rlm_agent.py` — RLMAgent implementing Agent.solve() with rlm.completion()
+- `rlm_bench/run.py` — Standalone CLI entry point mirroring tau_bench/run.py
+- Zero modifications to existing tau_bench/ files
