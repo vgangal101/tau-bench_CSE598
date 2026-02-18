@@ -176,3 +176,133 @@ python -m rlm_bench.run \
 - Task 2: Agent asks for user ID → looks up reservations → attempts resolution
 
 (No more instant `transfer_to_human_agents` on turn 1.)
+
+---
+
+## Round 2: Post-Escalation Fix Issues
+
+After Round 1 fixes, the agent does real work but still scores 0/3. New failure modes identified from log `rlm-qwen3-32b-0.0_range_0--1_user-qwen-qwen3-32b-llm_0218111635.log`:
+
+### New problems found
+
+**Task 0** (book flight JFK→SEA) — Agent completed the booking but reward=0 because:
+- Used `flight_type: "one way"` (space) instead of `"one_way"` (underscore) → different DB state hash
+- Included extra fields in `flights[]` (origin, destination, times) — tool only needs `flight_number` and `date`
+- Included extra `source` field in `payment_methods[]` — tool only needs `payment_id` and `amount`
+- Wasted 2 steps on hallucinated tools: `check_order_status` (doesn't exist) and `list_all_airports` (unnecessary)
+- Batched 2 respond actions in one turn (each consumed a step)
+
+**Task 1** (cancel reservation Z7GOZK) — Agent correctly cancelled but reward=0 because:
+- Called `send_certificate(user_id, amount=100)` after cancelling — this is unnecessary since `cancel_reservation` handles refunds automatically
+- The extra certificate modified DB state beyond ground truth
+
+**Task 2** (downgrade 5 reservations) — User simulator (Qwen3-32B) said `###STOP###` immediately instead of providing user ID — not an agent bug
+
+**Prose detection false positives** — Valid JSON like `[{"name": "respond", ...}]` got flagged as prose (due to ANSI codes or markdown fences), triggering corrective prompts that produced worse responses
+
+### Key architecture insight: reward calculation
+
+tau-bench reward uses **SHA256 hash comparison of entire DB state** (not parameter matching). After the agent acts, it hashes the DB. Then it replays ground-truth actions on a fresh DB and hashes that. `r_actions = (agent_hash == ground_truth_hash)`. Any extra mutation (like `send_certificate`) or wrong parameter value (like `"one way"`) that changes DB state differently → reward=0.
+
+---
+
+## Round 2 Fixes (4 changes across 2 files)
+
+### File 1: `rlm_bench/rlm_agent.py`
+
+#### Change 7: Tool name validation (`valid_tool_names` + `_validate_actions`)
+
+**Problem**: Model hallucinated tools (`check_order_status`, `reset_password`) wasting steps.
+
+Extract valid tool names in `__init__`:
+```python
+self.valid_tool_names = {
+    tool.get("function", tool)["name"] for tool in tools_info
+}
+```
+
+New `_validate_actions()` method that filters invalid tools AND enforces single-respond-per-turn:
+```python
+def _validate_actions(self, actions: List[Action]) -> List[Action]:
+    validated = []
+    for action in actions:
+        if action.name == RESPOND_ACTION_NAME or action.name in self.valid_tool_names:
+            validated.append(action)
+        else:
+            print(f"  [INVALID TOOL] '{action.name}' not in valid tools, skipping")
+    if not validated:
+        validated.append(Action(name=RESPOND_ACTION_NAME,
+            kwargs={"content": "Let me look into that for you."}))
+    # If any action is a respond, keep only up to the first respond
+    first_respond_idx = next(
+        (i for i, a in enumerate(validated) if a.name == RESPOND_ACTION_NAME), None)
+    if first_respond_idx is not None:
+        validated = validated[:first_respond_idx + 1]
+    return validated
+```
+
+Wired into `solve()` as the third step in the action pipeline:
+```python
+actions = self._parse_actions(response_text)
+actions = self._intercept_premature_terminate(actions, steps_used)
+actions = self._validate_actions(actions)  # NEW
+```
+
+This prevents:
+- Wasting steps on nonexistent tools
+- Batching multiple respond actions (only first respond kept)
+- Mixing respond with tool calls (respond truncates the list)
+
+#### Change 8: Fix prose detection false positives
+
+**Problem**: `_is_valid_action_response` returned False for valid JSON wrapped in ANSI codes or markdown fences, triggering unnecessary corrective prompts that produced hallucinated tool calls.
+
+Added pre-processing at the top of `_is_valid_action_response`:
+```python
+# Strip ANSI escape codes that may leak from litellm
+text = re.sub(r'\x1b\[[0-9;]*m', '', text)
+# Strip markdown code fences
+if text.startswith("```"):
+    lines = text.split("\n")
+    if lines[-1].strip() == "```":
+        lines = lines[1:-1]
+    else:
+        lines = lines[1:]
+    text = "\n".join(lines).strip()
+```
+
+### File 2: `rlm_bench/prompt_builder.py`
+
+#### Change 9: Parameter formatting rules
+
+**Problem**: Model used wrong enum values (`"one way"` vs `"one_way"`) and included extra fields in tool kwargs.
+
+Added `## Parameter Rules` section before `## Critical Prohibitions`:
+```
+## Parameter Rules
+
+- Use ONLY the parameters listed in each tool description. Do not add extra fields.
+- Use exact enum values from tool descriptions (e.g., "one_way" not "one way",
+  "round_trip" not "round trip", "basic_economy" not "basic economy").
+- For flights arrays, pass ONLY flight_number and date. The tool looks up the rest.
+- For payment_methods, pass ONLY payment_id and amount.
+- After cancelling a reservation, do NOT call send_certificate — refunds are automatic.
+```
+
+---
+
+## Round 2 Verification
+
+Same command as Round 1:
+```bash
+python -m rlm_bench.run \
+  --model qwen/qwen3-32b \
+  --model-provider openrouter \
+  --env airline \
+  --task-ids 0 1 2
+```
+
+**Expected improvements:**
+- Task 0: Correct `flight_type: "one_way"`, minimal kwargs in flights/payments, no hallucinated tools → DB hash should match
+- Task 1: No extra `send_certificate` after cancel → DB hash should match
+- Task 2: Still depends on user simulator quality (outside our control)

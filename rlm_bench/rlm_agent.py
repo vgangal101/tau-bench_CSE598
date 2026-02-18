@@ -80,6 +80,9 @@ class RLMAgent(Agent):
         self.provider = provider
         self.temperature = temperature
         self.terminate_tools = terminate_tools or []
+        self.valid_tool_names = {
+            tool.get("function", tool)["name"] for tool in tools_info
+        }
         self.prompt_builder = PromptBuilder(wiki=wiki, tools_info=tools_info)
 
         backend_kwargs = {"model_name": model}
@@ -115,6 +118,17 @@ class RLMAgent(Agent):
     def _is_valid_action_response(response_text: str) -> bool:
         """Check if the response contains at least one parseable JSON action."""
         text = response_text.strip()
+        # Strip ANSI escape codes that may leak from litellm
+        text = re.sub(r'\x1b\[[0-9;]*m', '', text)
+        # Strip markdown code fences
+        if text.startswith("```"):
+            lines = text.split("\n")
+            # Remove first line (```json or ```) and last line (```)
+            if lines[-1].strip() == "```":
+                lines = lines[1:-1]
+            else:
+                lines = lines[1:]
+            text = "\n".join(lines).strip()
         if '"name"' not in text or '"kwargs"' not in text:
             return False
         # Try direct parse as JSON array/object with action structure
@@ -162,6 +176,28 @@ class RLMAgent(Agent):
             else:
                 intercepted.append(action)
         return intercepted
+
+    def _validate_actions(self, actions: List[Action]) -> List[Action]:
+        """Filter out invalid tool names and enforce single-respond-per-turn."""
+        validated = []
+        for action in actions:
+            if action.name == RESPOND_ACTION_NAME or action.name in self.valid_tool_names:
+                validated.append(action)
+            else:
+                print(f"  [INVALID TOOL] '{action.name}' not in valid tools, skipping")
+        if not validated:
+            validated.append(Action(
+                name=RESPOND_ACTION_NAME,
+                kwargs={"content": "Let me look into that for you."},
+            ))
+        # If any action is a respond, keep only up to (and including) the first respond.
+        # This prevents batching respond with tool calls and multi-respond waste.
+        first_respond_idx = next(
+            (i for i, a in enumerate(validated) if a.name == RESPOND_ACTION_NAME), None
+        )
+        if first_respond_idx is not None:
+            validated = validated[:first_respond_idx + 1]
+        return validated
 
     def _parse_actions(self, response_text: str) -> List[Action]:
         """Parse one or more actions from the RLM response.
@@ -317,6 +353,7 @@ class RLMAgent(Agent):
 
             actions = self._parse_actions(response_text)
             actions = self._intercept_premature_terminate(actions, steps_used)
+            actions = self._validate_actions(actions)
             print(f"\n--- PARSED ACTIONS ({len(actions)}) ---")
             for i, a in enumerate(actions):
                 print(f"  [{i+1}] {a.name}({json.dumps(a.kwargs)})")
