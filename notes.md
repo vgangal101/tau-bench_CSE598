@@ -306,3 +306,58 @@ python -m rlm_bench.run \
 - Task 0: Correct `flight_type: "one_way"`, minimal kwargs in flights/payments, no hallucinated tools → DB hash should match
 - Task 1: No extra `send_certificate` after cancel → DB hash should match
 - Task 2: Still depends on user simulator quality (outside our control)
+
+---
+
+## Round 3: Results and Analysis
+
+Log file: `results/rlm-qwen3-32b-0.0_range_0--1_user-qwen-qwen3-32b-llm_0218123556.log`
+
+### Score: 1/3 (33%) — up from 0/3 (0%)
+
+**Task 0** (book flight JFK→SEA for passenger Mia Li) — reward=0.0
+- Round 2 formatting fixes confirmed working: `flight_type: "one_way"`, minimal kwargs
+- But model made **reasoning errors**:
+  - Hallucinated passenger name "Amelia Ahmed" instead of using "Mia Li" from `get_user_details` response
+  - Selected flight HAT218 ($285) instead of cheapest option HAT136
+  - Used credit card instead of travel certificates (customer had certificates available)
+- These are comprehension failures — the correct data was in the tool results
+
+**Task 1** (cancel reservation Z7GOZK) — reward=1.0 ✅ FIRST WIN
+- Round 2 fix directly caused this: no spurious `send_certificate` after cancel
+- Agent correctly: asked for user ID → looked up user → found reservation → cancelled it
+- DB state hash matched ground truth exactly
+
+**Task 2** (downgrade 5 reservations from business to economy) — reward=0.0
+- Agent performed all 5 `update_reservation_baggages` mutations correctly
+- Failed on **output value**: reported savings of "$5,640" but ground truth expected "$23,553"
+- Root cause: model pre-computed the savings amount in a respond action *before* executing the update tools, using wrong arithmetic
+- The correct calculation requires subtracting new economy prices from original business prices — but the model used post-downgrade prices for both
+
+### What the Round 2 fixes accomplished
+
+All 4 fixes were confirmed working in the logs:
+
+| Fix | Evidence |
+|-----|----------|
+| Tool name validation | `[INVALID TOOL] 'get_order_status'` caught and filtered |
+| Single respond per turn | No more batched respond actions |
+| ANSI/markdown stripping | No false positive prose detections |
+| Parameter Rules | Correct enum values, minimal kwargs |
+
+### Conclusion: Pipeline vs Model Capability
+
+The remaining failures are **model reasoning problems**, not pipeline problems:
+
+| Category | Example | Fixable with code? |
+|----------|---------|-------------------|
+| Data hallucination | "Amelia Ahmed" when API returned "Mia Li" | No — model had the data |
+| Wrong selection | Picked non-cheapest flight | No — requires domain reasoning |
+| Wrong payment method | Credit card instead of certificates | No — requires policy understanding |
+| Pre-computed outputs | Calculated savings before tool execution | No — requires execution planning |
+
+**Pipeline fixes** (Rounds 1-2) addressed structural issues: wrong formats, missing guards, extra mutations. These are problems where the model *would* do the right thing with better scaffolding.
+
+**Model capability limits** (Round 3) are problems where the model has all the data but makes wrong reasoning choices. Fixing these in code would mean hardcoding domain logic that only works for specific tasks and wouldn't generalize to the full benchmark.
+
+**Decision**: Accept current pipeline as complete. Run the full benchmark to get a statistically meaningful score. Compare across model sizes (4B, 8B, 14B, 32B) to see if reasoning improves with scale.
