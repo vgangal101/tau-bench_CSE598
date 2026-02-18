@@ -11,6 +11,10 @@ class PromptBuilder:
     def __init__(self, wiki: str, tools_info: List[Dict[str, Any]]):
         self.wiki = wiki
         self.tools_description = self._format_tools(tools_info)
+        # Extract tool names for use in instruction examples (prevents placeholder copying)
+        self.tool_names = [
+            tool.get("function", tool)["name"] for tool in tools_info
+        ]
 
     def _format_tools(self, tools_info: List[Dict[str, Any]]) -> str:
         lines = []
@@ -37,7 +41,14 @@ class PromptBuilder:
     def build_prompt(self, conversation_history: List[Dict[str, str]]) -> str:
         sections = []
 
-        sections.append("# Policy and Domain Knowledge")
+        # Role header at the top — first thing the model sees when it reads context
+        sections.append("# YOUR TASK")
+        sections.append(
+            "You are a customer service agent. Read the policy, tools, and conversation below, "
+            "then output a JSON action array. Do NOT summarize the policy. Do NOT output prose."
+        )
+
+        sections.append("\n# Policy and Domain Knowledge")
         sections.append(self.wiki)
 
         sections.append("\n# Available Tools")
@@ -57,6 +68,11 @@ class PromptBuilder:
             sections.append(f"[{role}]: {content}")
 
         sections.append("\n# Instructions")
+
+        # Use real tool names in examples to prevent placeholder copying
+        ex1 = self.tool_names[0] if self.tool_names else "tool_name"
+        ex2 = self.tool_names[1] if len(self.tool_names) > 1 else "tool_name_2"
+
         sections.append(
             'You are a customer service agent. Your job is to EXECUTE actions using tools, not discuss policies.\n'
             '\n'
@@ -65,10 +81,10 @@ class PromptBuilder:
             '## Output Format\n'
             '\n'
             'Tool calls:\n'
-            '  [{"name": "tool_name", "kwargs": {"param": "value"}}]\n'
+            f'  [{{"name": "{ex1}", "kwargs": {{"param": "value"}}}}]\n'
             '\n'
             'Batch independent tool calls:\n'
-            '  [{"name": "tool_1", "kwargs": {...}}, {"name": "tool_2", "kwargs": {...}}]\n'
+            f'  [{{"name": "{ex1}", "kwargs": {{...}}}}, {{"name": "{ex2}", "kwargs": {{...}}}}]\n'
             '\n'
             'Respond to customer:\n'
             '  [{"name": "respond", "kwargs": {"content": "your message"}}]\n'

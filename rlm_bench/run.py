@@ -182,7 +182,7 @@ def main():
     parser.add_argument("--user-model-base-url", type=str, default=None)
 
     # RLM-specific args
-    parser.add_argument("--rlm-max-depth", type=int, default=2)
+    parser.add_argument("--rlm-max-depth", type=int, default=1)
     parser.add_argument("--rlm-environment", type=str, default="local", choices=["local", "docker", "modal"])
 
     args = parser.parse_args()
