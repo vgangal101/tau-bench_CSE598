@@ -17,7 +17,14 @@ _REPL_ERROR_PATTERNS = [
     "You must create and assign a variable BEFORE calling FINAL_VAR",
 ]
 
+# Litellm/backend artifacts that leak into responses and corrupt conversation history
+_LITELLM_ARTIFACTS = [
+    "Provider List: https://docs.litellm.ai/docs/providers",
+]
+
 MAX_RLM_RETRIES = 2
+# Max consecutive respond-only turns before injecting a refocus nudge
+MAX_CONSECUTIVE_RESPONDS = 4
 
 
 class RLMAgent(Agent):
@@ -51,6 +58,16 @@ class RLMAgent(Agent):
             environment=environment,
             max_depth=max_depth,
         )
+
+    @staticmethod
+    def _sanitize_text(text: str) -> str:
+        """Strip litellm/backend artifacts that leak into responses."""
+        for artifact in _LITELLM_ARTIFACTS:
+            text = text.replace(artifact, "")
+        # Collapse runs of blank lines left behind
+        while "\n\n\n" in text:
+            text = text.replace("\n\n\n", "\n\n")
+        return text.strip()
 
     @staticmethod
     def _is_repl_error(response_text: str) -> bool:
@@ -118,7 +135,20 @@ class RLMAgent(Agent):
         except (json.JSONDecodeError, KeyError):
             pass
 
-        # Fallback: treat entire response as a customer-facing message
+        # Fallback: treat entire response as a customer-facing message,
+        # but cap length to avoid sending policy dumps or off-topic essays.
+        if len(text) > 500:
+            # Likely a policy summary or off-topic content; truncate to first sentence
+            first_sentence_end = min(
+                (text.find(". ") + 1) if ". " in text else len(text),
+                (text.find(".\n") + 1) if ".\n" in text else len(text),
+                500,
+            )
+            text = text[:first_sentence_end].strip()
+            if not text.endswith("."):
+                text += "."
+            text = text + " How can I help you with your specific request?"
+
         return [Action(
             name=RESPOND_ACTION_NAME,
             kwargs={"content": text},
@@ -129,10 +159,11 @@ class RLMAgent(Agent):
     ) -> SolveResult:
         total_cost = 0.0
         env_reset_res = env.reset(task_index=task_index)
-        obs = env_reset_res.observation
+        obs = self._sanitize_text(env_reset_res.observation)
         info = env_reset_res.info.model_dump()
         reward = 0.0
         steps_used = 0
+        consecutive_responds = 0  # track respond-only turns for loop detection
 
         conversation_history: List[Dict[str, str]] = [
             {"role": "customer", "content": obs},
@@ -163,7 +194,7 @@ class RLMAgent(Agent):
             response_text = None
             for attempt in range(1 + MAX_RLM_RETRIES):
                 result = self.rlm.completion(prompt)
-                response_text = result.response
+                response_text = self._sanitize_text(result.response)
 
                 if self._is_repl_error(response_text):
                     print(f"\n--- RLM REPL ERROR (attempt {attempt+1}/{1+MAX_RLM_RETRIES}) ---")
@@ -190,6 +221,29 @@ class RLMAgent(Agent):
             for i, a in enumerate(actions):
                 print(f"  [{i+1}] {a.name}({json.dumps(a.kwargs)})")
 
+            # --- Loop detection: all actions are respond-only? ---
+            all_respond = all(a.name == RESPOND_ACTION_NAME for a in actions)
+            if all_respond:
+                consecutive_responds += 1
+            else:
+                consecutive_responds = 0
+
+            if consecutive_responds >= MAX_CONSECUTIVE_RESPONDS:
+                print(f"\n  [LOOP DETECTED] {consecutive_responds} consecutive respond-only turns — "
+                      f"aborting to avoid wasting remaining steps.")
+                # Send a final concise message so the env can score
+                final_action = Action(
+                    name=RESPOND_ACTION_NAME,
+                    kwargs={"content": "I apologize, but I'm unable to assist further with this request. "
+                            "Let me transfer you to a human agent who can help."},
+                )
+                env_response = env.step(final_action)
+                reward = env_response.reward
+                info = {**info, **env_response.info.model_dump()}
+                steps_used += 1
+                messages.append({"role": "assistant", "content": final_action.kwargs["content"]})
+                break
+
             messages.append({"role": "assistant", "content": response_text})
 
             # Execute all actions from this RLM call
@@ -202,29 +256,32 @@ class RLMAgent(Agent):
                 info = {**info, **env_response.info.model_dump()}
                 steps_used += 1
 
+                # Sanitize env observations
+                env_obs = self._sanitize_text(env_response.observation)
+
                 print(f"\n--- ENV STEP {steps_used}: {action.name} ---")
                 if action.name != RESPOND_ACTION_NAME:
-                    print(f"  Tool result: {env_response.observation[:500]}")
+                    print(f"  Tool result: {env_obs[:500]}")
                     conversation_history.append(
                         {"role": "agent", "content": f"Tool call: {action.name}({json.dumps(action.kwargs)})"}
                     )
                     conversation_history.append(
-                        {"role": "tool_result", "content": env_response.observation}
+                        {"role": "tool_result", "content": env_obs}
                     )
                     messages.append(
-                        {"role": "user", "content": f"Tool result ({action.name}): {env_response.observation}"}
+                        {"role": "user", "content": f"Tool result ({action.name}): {env_obs}"}
                     )
                 else:
                     print(f"  Agent says: {action.kwargs.get('content', response_text)[:500]}")
-                    print(f"  Customer says: {env_response.observation[:500]}")
+                    print(f"  Customer says: {env_obs[:500]}")
                     conversation_history.append(
                         {"role": "agent", "content": action.kwargs.get("content", response_text)}
                     )
                     conversation_history.append(
-                        {"role": "customer", "content": env_response.observation}
+                        {"role": "customer", "content": env_obs}
                     )
                     messages.append(
-                        {"role": "user", "content": env_response.observation}
+                        {"role": "user", "content": env_obs}
                     )
 
                 print(f"  done={env_response.done}, reward={env_response.reward}")

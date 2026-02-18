@@ -2,6 +2,11 @@ import json
 from typing import List, Dict, Any
 
 
+# Maximum number of conversation history entries to include in the prompt.
+# Each turn is 2 entries (agent + customer/tool_result), so 30 entries ≈ 15 turns.
+MAX_HISTORY_ENTRIES = 30
+
+
 class PromptBuilder:
     def __init__(self, wiki: str, tools_info: List[Dict[str, Any]]):
         self.wiki = wiki
@@ -39,36 +44,54 @@ class PromptBuilder:
         sections.append(self.tools_description)
 
         sections.append("\n# Conversation History")
-        for entry in conversation_history:
+        # Keep the first entry (original customer request) and the most recent turns
+        if len(conversation_history) > MAX_HISTORY_ENTRIES:
+            sections.append(f"[{conversation_history[0]['role']}]: {conversation_history[0]['content']}")
+            sections.append(f"[... {len(conversation_history) - MAX_HISTORY_ENTRIES} earlier messages omitted ...]")
+            trimmed = conversation_history[-MAX_HISTORY_ENTRIES + 1:]
+        else:
+            trimmed = conversation_history
+        for entry in trimmed:
             role = entry["role"]
             content = entry["content"]
             sections.append(f"[{role}]: {content}")
 
         sections.append("\n# Instructions")
         sections.append(
-            'You are a customer service agent. Your job is to EXECUTE actions, not just discuss them.\n'
+            'You are a customer service agent. Your job is to EXECUTE actions using tools, not discuss policies.\n'
             '\n'
-            'Output a JSON array of actions. RULES:\n'
+            'Output ONLY a valid JSON array. No text before or after. No markdown. No commentary.\n'
             '\n'
-            '1. BATCH independent tool calls in one turn:\n'
-            '   [{"name": "tool_1", "kwargs": {...}}, {"name": "tool_2", "kwargs": {...}}]\n'
-            '   Example: if you have 5 order IDs, look up ALL of them in one turn.\n'
+            '## Output Format\n'
             '\n'
-            '2. Single tool call:\n'
-            '   [{"name": "tool_name", "kwargs": {...}}]\n'
+            'Tool calls:\n'
+            '  [{"name": "tool_name", "kwargs": {"param": "value"}}]\n'
             '\n'
-            '3. Respond to customer (ONLY when you have all info or need input):\n'
-            '   [{"name": "respond", "kwargs": {"content": "your message"}}]\n'
-            '   Never batch respond with tool calls.\n'
+            'Batch independent tool calls:\n'
+            '  [{"name": "tool_1", "kwargs": {...}}, {"name": "tool_2", "kwargs": {...}}]\n'
             '\n'
-            '4. EXECUTE mutation tools (exchange, return, modify, cancel) when you have the\n'
-            '   required parameters. Do NOT just describe what you would do — actually call the tool.\n'
-            '   If the customer confirmed an action and you have all the IDs, call the tool NOW.\n'
+            'Respond to customer:\n'
+            '  [{"name": "respond", "kwargs": {"content": "your message"}}]\n'
             '\n'
-            '5. When the customer provides their name/zip/email, immediately look them up.\n'
-            '   When you get a user with order IDs, batch-fetch ALL order details in one turn.\n'
+            '## Action Rules\n'
             '\n'
-            'Output ONLY the JSON array. No explanations, no markdown, no commentary.'
+            '1. ALWAYS prefer tool calls over responding. Only respond when you genuinely need\n'
+            '   information from the customer or are delivering a final answer.\n'
+            '2. When the customer provides identifying info (name, email, user ID), immediately\n'
+            '   call the lookup tool. When you get order/reservation IDs, batch-fetch ALL details.\n'
+            '3. EXECUTE mutation tools (modify, cancel, exchange, return) when you have the\n'
+            '   required parameters. Do NOT just describe what you would do — call the tool.\n'
+            '4. Never batch a respond action with tool calls.\n'
+            '\n'
+            '## Critical Prohibitions\n'
+            '\n'
+            '- Do NOT summarize or recite the policy. The customer does not need policy text.\n'
+            '- Do NOT fabricate data (reservation IDs, amounts, dates) that the customer did not provide.\n'
+            '- Do NOT repeat the same question the customer just asked you.\n'
+            '- Do NOT output anything other than a JSON array. No prose, no bullet points, no analysis.\n'
+            '- Keep responses SHORT and actionable (1-2 sentences max).\n'
+            '- If the conversation has stalled and you cannot make progress, respond with:\n'
+            '  [{"name": "respond", "kwargs": {"content": "Let me transfer you to a specialist."}}]'
         )
 
         return "\n".join(sections)

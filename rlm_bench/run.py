@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import random
 import argparse
@@ -17,6 +18,27 @@ from rlm_bench.config import RLMRunConfig
 from rlm_bench.rlm_agent import RLMAgent
 
 
+class Tee:
+    """Duplicates stdout to both the terminal and a log file."""
+
+    def __init__(self, log_path: str):
+        self.terminal = sys.stdout
+        self.log_file = open(log_path, "a", encoding="utf-8")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log_file.write(message)
+        self.log_file.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log_file.flush()
+
+    def close(self):
+        sys.stdout = self.terminal
+        self.log_file.close()
+
+
 def run(config: RLMRunConfig) -> List[EnvRunResult]:
     assert config.env in ["retail", "airline"], "Only retail and airline envs are supported"
     assert config.task_split in ["train", "test", "dev"], "Invalid task split"
@@ -32,6 +54,11 @@ def run(config: RLMRunConfig) -> List[EnvRunResult]:
     )
     os.makedirs(config.log_dir, exist_ok=True)
 
+    log_path = ckpt_path.replace(".json", ".log")
+    tee = Tee(log_path)
+    sys.stdout = tee
+
+    print(f"Log file: {log_path}")
     print(f"Loading user with strategy: {config.user_strategy}")
     env = get_env(
         config.env,
@@ -124,7 +151,10 @@ def run(config: RLMRunConfig) -> List[EnvRunResult]:
 
     with open(ckpt_path, "w") as f:
         json.dump([result.model_dump() for result in results], f, indent=2)
-        print(f"\n\U0001f4c4 Results saved to {ckpt_path}\n")
+        print(f"\n\U0001f4c4 Results saved to {ckpt_path}")
+        print(f"\U0001f4cb Log saved to {log_path}\n")
+
+    tee.close()
     return results
 
 
