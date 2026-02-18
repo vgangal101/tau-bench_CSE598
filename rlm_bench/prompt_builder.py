@@ -22,6 +22,15 @@ class PromptBuilder:
             func = tool.get("function", tool)
             name = func["name"]
             desc = func.get("description", "")
+
+            # Strengthen transfer tool description to discourage premature use
+            if name == "transfer_to_human_agents":
+                desc = (
+                    "LAST RESORT ONLY. Transfer to a human agent. "
+                    "You must NEVER call this unless: (a) the customer explicitly asks "
+                    "for a human, OR (b) you have already looked up the account and "
+                    "confirmed the issue cannot be resolved with available tools."
+                )
             params = func.get("parameters", {})
             props = params.get("properties", {})
             required = params.get("required", [])
@@ -67,6 +76,16 @@ class PromptBuilder:
             content = entry["content"]
             sections.append(f"[{role}]: {content}")
 
+        # First-turn guidance: prevent the model from hallucinating prior interaction
+        if len(conversation_history) <= 2:
+            sections.append("\n# IMPORTANT: This is the START of the conversation")
+            sections.append(
+                "The customer just reached out. You have NOT asked them anything yet.\n"
+                "Your action: respond and ask for their user ID so you can look up their account.\n"
+                "Do NOT call any tools yet (you have no user ID to look up).\n"
+                "Do NOT transfer to a human agent."
+            )
+
         sections.append("\n# Instructions")
 
         # Use real tool names in examples to prevent placeholder copying
@@ -106,8 +125,8 @@ class PromptBuilder:
             '- Do NOT repeat the same question the customer just asked you.\n'
             '- Do NOT output anything other than a JSON array. No prose, no bullet points, no analysis.\n'
             '- Keep responses SHORT and actionable (1-2 sentences max).\n'
-            '- If the conversation has stalled and you cannot make progress, respond with:\n'
-            '  [{"name": "respond", "kwargs": {"content": "Let me transfer you to a specialist."}}]'
+            '- Do NOT call transfer_to_human_agents unless the customer explicitly requests a human agent.\n'
+            '  You MUST first: ask for their user ID, look up their account, and attempt to resolve the issue.'
         )
 
         return "\n".join(sections)

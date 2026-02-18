@@ -25,6 +25,8 @@ _LITELLM_ARTIFACTS = [
 MAX_RLM_RETRIES = 2
 # Max consecutive respond-only turns before injecting a refocus nudge
 MAX_CONSECUTIVE_RESPONDS = 4
+# Minimum env.step() calls before allowing terminate tools (e.g., transfer_to_human_agents)
+MIN_STEPS_BEFORE_TERMINATE = 3
 
 # Custom system prompt that replaces the RLM's default 90-line document-analysis prompt.
 # Orients the model as an agent while preserving REPL mechanics (```repl``` blocks, FINAL()).
@@ -70,12 +72,14 @@ class RLMAgent(Agent):
         max_depth: int = 1,
         environment: str = "local",
         model_base_url: Optional[str] = None,
+        terminate_tools: Optional[List[str]] = None,
     ):
         self.tools_info = tools_info
         self.wiki = wiki
         self.model = model
         self.provider = provider
         self.temperature = temperature
+        self.terminate_tools = terminate_tools or []
         self.prompt_builder = PromptBuilder(wiki=wiki, tools_info=tools_info)
 
         backend_kwargs = {"model_name": model}
@@ -138,6 +142,26 @@ class RLMAgent(Agent):
             except (json.JSONDecodeError, KeyError):
                 pass
         return False
+
+    def _intercept_premature_terminate(
+        self, actions: List[Action], steps_used: int
+    ) -> List[Action]:
+        """Replace terminate-tool calls with a respond action if too early in the conversation."""
+        if steps_used >= MIN_STEPS_BEFORE_TERMINATE:
+            return actions
+        intercepted = []
+        for action in actions:
+            if action.name in self.terminate_tools:
+                print(f"  [INTERCEPTED] {action.name} blocked (steps_used={steps_used} < {MIN_STEPS_BEFORE_TERMINATE})")
+                intercepted.append(Action(
+                    name=RESPOND_ACTION_NAME,
+                    kwargs={"content": "I'd be happy to help you with that. "
+                            "Could you please provide me with your user ID "
+                            "so I can look into this for you?"},
+                ))
+            else:
+                intercepted.append(action)
+        return intercepted
 
     def _parse_actions(self, response_text: str) -> List[Action]:
         """Parse one or more actions from the RLM response.
@@ -292,6 +316,7 @@ class RLMAgent(Agent):
             print(response_text)
 
             actions = self._parse_actions(response_text)
+            actions = self._intercept_premature_terminate(actions, steps_used)
             print(f"\n--- PARSED ACTIONS ({len(actions)}) ---")
             for i, a in enumerate(actions):
                 print(f"  [{i+1}] {a.name}({json.dumps(a.kwargs)})")

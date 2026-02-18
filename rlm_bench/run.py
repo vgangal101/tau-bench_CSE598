@@ -78,6 +78,7 @@ def run(config: RLMRunConfig) -> List[EnvRunResult]:
         max_depth=config.rlm_max_depth,
         environment=config.rlm_environment,
         model_base_url=config.model_base_url,
+        terminate_tools=getattr(env, "terminate_tools", []),
     )
 
     end_index = (
