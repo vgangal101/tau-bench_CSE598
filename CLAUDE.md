@@ -176,6 +176,15 @@ OPENROUTER_API_KEY=...
 DASHSCOPE_API_KEY=...
 ```
 
+## Change Log Requirement
+
+**Every code change must be documented in `notes.md`.** When modifying any file in this repository, append an entry to `notes.md` that includes:
+- Which file(s) were changed
+- What was changed (with code snippets where helpful)
+- Why the change was made (the problem it solves or the feature it adds)
+
+This keeps a running record for the team. Do not skip this step.
+
 ## Quick Start
 
 See **QUICKSTART.md** for step-by-step instructions to get running in 5 minutes.
