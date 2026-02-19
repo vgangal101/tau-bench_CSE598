@@ -15,5 +15,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1934 | 2:44 PM | 🔵 | Full RLM Agent Architecture — `rlm_agent.py` (436 lines) | ~759 |
 | #1932 | 12:42 PM | 🔵 | RLM Agent Tool Name Extraction in __init__ | ~266 |
 </claude-mem-context>
