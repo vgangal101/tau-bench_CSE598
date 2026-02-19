@@ -406,3 +406,22 @@ Doubled all literal curly braces in the JSON example lines (lines 41-42):
 `{{` and `}}` are Python's escape sequences for literal `{` and `}` inside `.format()` strings. After `.format()` processes the string, the model sees the correct single braces.
 
 Note: `CORRECTIVE_SUFFIX` and `ROOT_PROMPT` were NOT changed — they are part of the `prompt` (context), not the `system_prompt`, so they don't go through `.format()`.
+
+### Fix (Change 11): Remove `sara_doe_496` from `AGENT_SYSTEM_PROMPT` examples
+
+**Problem**: In Round 4 run, the model called `get_user_details("sara_doe_496")` as its FIRST action on 2/3 tasks — copying the example user ID from `AGENT_SYSTEM_PROMPT` instead of waiting for the customer to provide their ID. This wasted a step and sometimes triggered `transfer_to_human_agents` after the "user not found" error.
+
+**File**: `rlm_bench/rlm_agent.py`
+
+Replaced concrete `get_user_details` example with generic placeholders:
+```python
+# Before:
+'  FINAL([{{"name": "get_user_details", "kwargs": {{"user_id": "sara_doe_496"}}}}])\n'
+'  FINAL([{{"name": "respond", "kwargs": {{"content": "your message"}}}}])\n\n'
+
+# After:
+'  FINAL([{{"name": "respond", "kwargs": {{"content": "How can I help you today?"}}}}])\n'
+'  FINAL([{{"name": "TOOL_NAME", "kwargs": {{"param": "value"}}}}])\n\n'
+```
+
+The `respond` example now leads with asking the customer (the correct first action). The tool call example uses a generic placeholder so the model won't copy a specific tool name or user ID.

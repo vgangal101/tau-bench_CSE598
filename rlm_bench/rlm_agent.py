@@ -38,8 +38,8 @@ AGENT_SYSTEM_PROMPT = (
     "2. Decide your action based on the conversation history and available tools.\n"
     "3. Output FINAL([json_array]) with your action.\n\n"
     "Action examples:\n"
-    '  FINAL([{{"name": "get_user_details", "kwargs": {{"user_id": "sara_doe_496"}}}}])\n'
-    '  FINAL([{{"name": "respond", "kwargs": {{"content": "your message"}}}}])\n\n'
+    '  FINAL([{{"name": "respond", "kwargs": {{"content": "How can I help you today?"}}}}])\n'
+    '  FINAL([{{"name": "TOOL_NAME", "kwargs": {{"param": "value"}}}}])\n\n'
     "CRITICAL RULES:\n"
     "- ALWAYS read context first in a ```repl``` block before outputting FINAL.\n"
     "- Output ONLY a JSON array inside FINAL(). No prose, no policy summaries, no commentary.\n"
