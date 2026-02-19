@@ -45,6 +45,7 @@ AGENT_SYSTEM_PROMPT = (
     "- Output ONLY a JSON array inside FINAL(). No prose, no policy summaries, no commentary.\n"
     "- Prefer tool calls over responding to the customer.\n"
     "- Do NOT use llm_query or llm_query_batched. Everything you need is in context.\n"
+    "- 'repl' is NOT a tool name. Use ```repl``` code blocks for REPL execution, then call FINAL() separately.\n"
 )
 
 # Root prompt inserted at every REPL iteration to keep the model focused on JSON output.
@@ -58,6 +59,15 @@ CORRECTIVE_SUFFIX = (
     "\n\n# CORRECTIVE INSTRUCTION\n"
     "Your previous response was not valid JSON actions. "
     'Output FINAL([{"name": "tool_or_respond", "kwargs": {...}}]) now. No prose.'
+)
+
+# Corrective suffix when the model tries to use "repl" as a tool name.
+REPL_TOOL_CORRECTION_SUFFIX = (
+    "\n\n# CORRECTIVE INSTRUCTION\n"
+    '"repl" is NOT a valid tool. To run Python code, use ```repl``` code blocks '
+    "(NOT inside FINAL). When you are ready to act, output "
+    'FINAL([{"name": "actual_tool_name", "kwargs": {...}}]). '
+    "The available tools are listed in the context."
 )
 
 
@@ -352,6 +362,20 @@ class RLMAgent(Agent):
             print(response_text)
 
             actions = self._parse_actions(response_text)
+
+            # Repl-as-tool detection: model confused ```repl``` blocks with a tool call.
+            # Retry with corrective prompt instead of wasting a turn on a generic respond.
+            has_repl_tool = any(a.name == "repl" for a in actions)
+            if has_repl_tool:
+                print(f"\n--- REPL-AS-TOOL HALLUCINATION (retrying with correction) ---")
+                print(f"  Actions contained 'repl' tool: {[a.name for a in actions]}")
+                corrective_prompt = prompt + REPL_TOOL_CORRECTION_SUFFIX
+                result = self.rlm.completion(corrective_prompt, root_prompt=ROOT_PROMPT)
+                response_text = self._sanitize_text(result.response)
+                print(f"\n--- CORRECTIVE RLM RESPONSE ---")
+                print(response_text[:500])
+                actions = self._parse_actions(response_text)
+
             actions = self._intercept_premature_terminate(actions, steps_used)
             actions = self._validate_actions(actions)
             print(f"\n--- PARSED ACTIONS ({len(actions)}) ---")
