@@ -28,29 +28,91 @@ MAX_CONSECUTIVE_RESPONDS = 4
 # Minimum env.step() calls before allowing terminate tools (e.g., transfer_to_human_agents)
 MIN_STEPS_BEFORE_TERMINATE = 3
 
+# Context size threshold (chars) above which the agent uses llm_query() chunking
+# instead of printing the full context. Chosen to stay under the RLM library's
+# 20K char truncation limit in format_iteration() (parsing.py:67).
+CONTEXT_SIZE_THRESHOLD = 20000
+_THRESHOLD_STR = str(CONTEXT_SIZE_THRESHOLD)
+
 # Custom system prompt that replaces the RLM's default 90-line document-analysis prompt.
 # Orients the model as an agent while preserving REPL mechanics (```repl``` blocks, FINAL()).
+# Uses a two-workflow approach: direct print for small contexts, llm_query() chunking for large.
+#
+# NOTE: Uses .replace() instead of .format() because the RLM library's build_rlm_system_prompt()
+# also calls .format() on the template containing this string. Double braces {{ }} must survive
+# both passes: our expansion here and the RLM library's expansion later.
 AGENT_SYSTEM_PROMPT = (
     "You are a customer service agent. Your task instructions are in the `context` variable.\n\n"
-    "The context contains: domain policy, available tools, conversation history, and output format instructions.\n\n"
-    "Workflow:\n"
-    "1. Read the context: ```repl\nprint(context)\n```\n"
-    "2. Decide your action based on the conversation history and available tools.\n"
-    "3. Output FINAL([json_array]) with your action.\n\n"
-    "Action examples:\n"
+    "The context contains: domain policy, available tools, conversation history, and output format instructions.\n"
+    "Sections are delimited by <<<SECTION_NAME>>> and <<<END_SECTION_NAME>>> markers.\n\n"
+    "## Step 1: Check context size\n\n"
+    "ALWAYS start with this ```repl``` block:\n"
+    "```repl\n"
+    "print(f'Context size: {{len(context)}} chars')\n"
+    "```\n\n"
+    "## Step 2: Choose workflow based on size\n\n"
+    "### Workflow A — Small context (under SIZE_THRESHOLD chars)\n\n"
+    "Print the full context, then decide your action:\n"
+    "```repl\n"
+    "print(context)\n"
+    "```\n"
+    "Then output FINAL([json_array]).\n\n"
+    "### Workflow B — Large context (SIZE_THRESHOLD+ chars)\n\n"
+    "The full context is too large to print at once (it will be truncated). "
+    "Extract the key sections programmatically:\n\n"
+    "```repl\n"
+    "# Extract tools section (always needed)\n"
+    "tools_start = context.find('<<<TOOLS>>>') + len('<<<TOOLS>>>')\n"
+    "tools_end = context.find('<<<END_TOOLS>>>')\n"
+    "tools = context[tools_start:tools_end].strip()\n\n"
+    "# Extract history section and keep only recent turns\n"
+    "hist_start = context.find('<<<HISTORY>>>') + len('<<<HISTORY>>>')\n"
+    "hist_end = context.find('<<<END_HISTORY>>>')\n"
+    "history_lines = context[hist_start:hist_end].strip().split('\\n')\n"
+    "recent = '\\n'.join(history_lines[-10:])  # last ~5 turns\n"
+    "older = '\\n'.join(history_lines[:-10])\n\n"
+    "# Extract wiki section\n"
+    "wiki_start = context.find('<<<WIKI>>>') + len('<<<WIKI>>>')\n"
+    "wiki_end = context.find('<<<END_WIKI>>>')\n"
+    "wiki = context[wiki_start:wiki_end].strip()\n\n"
+    "# Extract instructions section\n"
+    "instr_start = context.find('<<<INSTRUCTIONS>>>') + len('<<<INSTRUCTIONS>>>')\n"
+    "instr_end = context.find('<<<END_INSTRUCTIONS>>>')\n"
+    "instructions = context[instr_start:instr_end].strip()\n\n"
+    "# Summarize wiki + older history via llm_query\n"
+    "summary_prompt = ("
+    "'Summarize the following policy rules and older conversation history. '"
+    "'Focus on: (1) rules relevant to the customer\\'s request, '"
+    "'(2) what actions have already been taken, '"
+    "'(3) what information has been gathered.\\n\\n'"
+    "'POLICY:\\n' + wiki + '\\n\\nOLDER HISTORY:\\n' + older"
+    ")\n"
+    "summary = llm_query(summary_prompt)\n\n"
+    "print('=== SUMMARY ===')\n"
+    "print(summary)\n"
+    "print('\\n=== TOOLS ===')\n"
+    "print(tools)\n"
+    "print('\\n=== RECENT CONVERSATION ===')\n"
+    "print(recent)\n"
+    "print('\\n=== INSTRUCTIONS ===')\n"
+    "print(instructions)\n"
+    "```\n"
+    "Then output FINAL([json_array]).\n\n"
+    "## Action examples\n\n"
     '  FINAL([{{"name": "respond", "kwargs": {{"content": "How can I help you today?"}}}}])\n'
     '  FINAL([{{"name": "TOOL_NAME", "kwargs": {{"param": "value"}}}}])\n\n'
-    "CRITICAL RULES:\n"
-    "- ALWAYS read context first in a ```repl``` block before outputting FINAL.\n"
+    "## CRITICAL RULES\n\n"
+    "- ALWAYS check context size first. Do NOT skip Step 1.\n"
+    "- Do NOT use llm_query when context is under SIZE_THRESHOLD chars.\n"
     "- Output ONLY a JSON array inside FINAL(). No prose, no policy summaries, no commentary.\n"
     "- Prefer tool calls over responding to the customer.\n"
-    "- Do NOT use llm_query or llm_query_batched. Everything you need is in context.\n"
     "- 'repl' is NOT a tool name. Use ```repl``` code blocks for REPL execution, then call FINAL() separately.\n"
-)
+).replace("SIZE_THRESHOLD", _THRESHOLD_STR)
 
 # Root prompt inserted at every REPL iteration to keep the model focused on JSON output.
 ROOT_PROMPT = (
-    "Read the context and output FINAL([json_array]) with your action. "
+    "Check the context size, follow the appropriate workflow (A for small, B for large), "
+    "and output FINAL([json_array]) with your action. "
     "The json_array must contain objects with 'name' and 'kwargs' keys. No prose."
 )
 

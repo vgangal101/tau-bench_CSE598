@@ -425,3 +425,96 @@ Replaced concrete `get_user_details` example with generic placeholders:
 ```
 
 The `respond` example now leads with asking the customer (the correct first action). The tool call example uses a generic placeholder so the model won't copy a specific tool name or user ID.
+
+---
+
+# Size-Aware RLM Agent with `llm_query()` Chunking — Feb 19, 2026
+
+## Problem
+
+The RLM agent wastes the framework's recursive capabilities. Every turn, the model does `print(context)` to read the entire prompt, then outputs `FINAL([...])`. As conversations progress (turn 10+), the context can exceed 20K chars. The RLM library's `format_iteration()` (`parsing.py:67`) truncates REPL output to 20K chars in message history, meaning the model can't see the full context on later turns.
+
+Additionally, `llm_query()` was explicitly prohibited in `AGENT_SYSTEM_PROMPT` despite being fully functional in the REPL sandbox (`local_repl.py:165`). Using it to extract relevant policy rules from long contexts should produce better tool-calling decisions.
+
+## Changes (3 files)
+
+### Change 12: Add section markers to `prompt_builder.py`
+
+**File**: `rlm_bench/prompt_builder.py`
+
+Wrapped each section of the built prompt in `<<<SECTION_NAME>>>` / `<<<END_SECTION_NAME>>>` delimiters so the model can extract sections programmatically with `str.find()` in the REPL.
+
+Markers added: `<<<TASK>>>`, `<<<WIKI>>>`, `<<<TOOLS>>>`, `<<<HISTORY>>>`, `<<<INSTRUCTIONS>>>` (and corresponding `<<<END_*>>>` markers).
+
+```python
+# Before:
+sections.append("# YOUR TASK")
+sections.append(...)
+sections.append("\n# Policy and Domain Knowledge")
+sections.append(self.wiki)
+
+# After:
+sections.append("<<<TASK>>>")
+sections.append("# YOUR TASK")
+sections.append(...)
+sections.append("<<<END_TASK>>>")
+sections.append("\n<<<WIKI>>>")
+sections.append("# Policy and Domain Knowledge")
+sections.append(self.wiki)
+sections.append("<<<END_WIKI>>>")
+```
+
+This is backward-compatible — markers are just extra text in the string. Existing prompts work identically.
+
+### Change 13: Two-workflow `AGENT_SYSTEM_PROMPT` in `rlm_agent.py`
+
+**File**: `rlm_bench/rlm_agent.py`
+
+Added `CONTEXT_SIZE_THRESHOLD = 20000` constant.
+
+Replaced the single-workflow system prompt with a two-workflow design:
+
+- **Step 1**: Always start by checking `len(context)` in a REPL block
+- **Workflow A** (under 20K chars): `print(context)` then `FINAL()` — same as before
+- **Workflow B** (20K+ chars): Extract sections via `str.find()`, use `llm_query()` to summarize wiki + older history, keep tools + recent 5 turns visible, then `FINAL()`
+
+Key changes:
+- Removed `llm_query` prohibition (was: "Do NOT use llm_query or llm_query_batched")
+- Added explicit size check as the first required step
+- Added "Do NOT use llm_query when context is under 20000 chars" to prevent unnecessary sub-calls on small contexts
+- Used `.replace("SIZE_THRESHOLD", _THRESHOLD_STR)` instead of `.format()` to avoid conflicts with the RLM library's own `.format()` pass on the system prompt
+
+### Change 14: Updated `ROOT_PROMPT` in `rlm_agent.py`
+
+**File**: `rlm_bench/rlm_agent.py`
+
+Updated from:
+```python
+ROOT_PROMPT = "Read the context and output FINAL([json_array]) with your action. ..."
+```
+
+To:
+```python
+ROOT_PROMPT = "Check the context size, follow the appropriate workflow (A for small, B for large), and output FINAL([json_array]) with your action. ..."
+```
+
+This reinforces the size-check-first behavior at every REPL iteration.
+
+## Why `.replace()` instead of `.format()`
+
+The RLM library's `build_rlm_system_prompt()` concatenates our system prompt into a template and calls `.format()` on it. Using our own `.format(threshold=...)` would strip the double braces `{{` needed for the RLM library's pass (e.g., `{{"name": "respond"}}` → `{"name": "respond"}` → KeyError). Using `.replace("SIZE_THRESHOLD", "20000")` only touches our placeholder and leaves all braces intact.
+
+## How `llm_query()` works
+
+- Already registered in the REPL sandbox (`local_repl.py:165`)
+- `max_depth=1` means `llm_query()` makes a direct LLM call (no nested REPL) — exactly right for summarization
+- The sub-LLM call input is ~11K chars (6K wiki + 5K older history) — trivial for any model
+- Cost: ~$0.0002 per chunked turn at OpenRouter Qwen3-8B pricing
+- Already has try/except returning error string on failure; model can fall back to `print(context)`
+
+## Verification
+
+- `py_compile.compile()` passes for both files
+- Section markers verified with `str.find()` extraction on test prompts
+- `.replace()` confirmed to substitute threshold while preserving `{{` double braces
+- With realistic wiki (~6K) and 14 tools, contexts reach 12-23K range (observation #2038), crossing the 20K threshold at turn 10+ with long tool results

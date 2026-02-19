@@ -51,19 +51,26 @@ class PromptBuilder:
         sections = []
 
         # Role header at the top — first thing the model sees when it reads context
+        sections.append("<<<TASK>>>")
         sections.append("# YOUR TASK")
         sections.append(
             "You are a customer service agent. Read the policy, tools, and conversation below, "
             "then output a JSON action array. Do NOT summarize the policy. Do NOT output prose."
         )
+        sections.append("<<<END_TASK>>>")
 
-        sections.append("\n# Policy and Domain Knowledge")
+        sections.append("\n<<<WIKI>>>")
+        sections.append("# Policy and Domain Knowledge")
         sections.append(self.wiki)
+        sections.append("<<<END_WIKI>>>")
 
-        sections.append("\n# Available Tools")
+        sections.append("\n<<<TOOLS>>>")
+        sections.append("# Available Tools")
         sections.append(self.tools_description)
+        sections.append("<<<END_TOOLS>>>")
 
-        sections.append("\n# Conversation History")
+        sections.append("\n<<<HISTORY>>>")
+        sections.append("# Conversation History")
         # Keep the first entry (original customer request) and the most recent turns
         if len(conversation_history) > MAX_HISTORY_ENTRIES:
             sections.append(f"[{conversation_history[0]['role']}]: {conversation_history[0]['content']}")
@@ -75,6 +82,7 @@ class PromptBuilder:
             role = entry["role"]
             content = entry["content"]
             sections.append(f"[{role}]: {content}")
+        sections.append("<<<END_HISTORY>>>")
 
         # First-turn guidance: prevent the model from hallucinating prior interaction
         if len(conversation_history) <= 2:
@@ -86,7 +94,8 @@ class PromptBuilder:
                 "Do NOT transfer to a human agent."
             )
 
-        sections.append("\n# Instructions")
+        sections.append("\n<<<INSTRUCTIONS>>>")
+        sections.append("# Instructions")
 
         # Use real tool names in examples to prevent placeholder copying
         ex1 = self.tool_names[0] if self.tool_names else "tool_name"
@@ -137,5 +146,6 @@ class PromptBuilder:
             '- Do NOT call transfer_to_human_agents unless the customer explicitly requests a human agent.\n'
             '  You MUST first: ask for their user ID, look up their account, and attempt to resolve the issue.'
         )
+        sections.append("<<<END_INSTRUCTIONS>>>")
 
         return "\n".join(sections)

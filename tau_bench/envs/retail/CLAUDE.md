@@ -8,4 +8,12 @@
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
 | #859 | 6:38 PM | 🔵 | Retail Task Definition Structure and Complexity | ~466 |
+
+### Feb 19, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2042 | 2:09 PM | 🔵 | Retail Domain Wiki with Authentication and One-Shot Mutation Constraints | ~870 |
+| #2039 | 2:06 PM | 🔵 | RLM Agent Context Size Analysis Across Airline and Retail Domains | ~701 |
+| #2031 | 2:03 PM | 🔵 | Retail Environment Domain Policy and Business Rules | ~739 |
 </claude-mem-context>
