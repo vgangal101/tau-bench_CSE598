@@ -361,3 +361,48 @@ The remaining failures are **model reasoning problems**, not pipeline problems:
 **Model capability limits** (Round 3) are problems where the model has all the data but makes wrong reasoning choices. Fixing these in code would mean hardcoding domain logic that only works for specific tasks and wouldn't generalize to the full benchmark.
 
 **Decision**: Accept current pipeline as complete. Run the full benchmark to get a statistically meaningful score. Compare across model sizes (4B, 8B, 14B, 32B) to see if reasoning improves with scale.
+
+---
+
+## Round 4: RLM Library Compatibility Fix
+
+### Problem
+
+After the RLM library (`rlm_cse598`) was updated upstream, every task fails with:
+```
+KeyError: '"name"'
+```
+
+Traceback:
+```
+rlm/utils/prompts.py, line 156, in build_rlm_system_prompt
+    final_system_prompt = system_prompt.format(custom_tools_section=custom_tools_section)
+```
+
+### Root cause
+
+The updated RLM library now calls `system_prompt.format(custom_tools_section=...)` on the custom system prompt. Python's `str.format()` treats `{` and `}` as format placeholders. Our `AGENT_SYSTEM_PROMPT` contained JSON examples with literal curly braces:
+```python
+'  FINAL([{"name": "get_user_details", "kwargs": {"user_id": "sara_doe_496"}}])\n'
+```
+
+Python interprets `{"name"` as a format field lookup for key `"name"` → `KeyError`.
+
+### Fix (Change 10): Escape curly braces in `AGENT_SYSTEM_PROMPT`
+
+**File**: `rlm_bench/rlm_agent.py`
+
+Doubled all literal curly braces in the JSON example lines (lines 41-42):
+```python
+# Before:
+'  FINAL([{"name": "get_user_details", "kwargs": {"user_id": "sara_doe_496"}}])\n'
+'  FINAL([{"name": "respond", "kwargs": {"content": "your message"}}])\n\n'
+
+# After:
+'  FINAL([{{"name": "get_user_details", "kwargs": {{"user_id": "sara_doe_496"}}}}])\n'
+'  FINAL([{{"name": "respond", "kwargs": {{"content": "your message"}}}}])\n\n'
+```
+
+`{{` and `}}` are Python's escape sequences for literal `{` and `}` inside `.format()` strings. After `.format()` processes the string, the model sees the correct single braces.
+
+Note: `CORRECTIVE_SUFFIX` and `ROOT_PROMPT` were NOT changed — they are part of the `prompt` (context), not the `system_prompt`, so they don't go through `.format()`.
