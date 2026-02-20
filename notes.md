@@ -518,3 +518,49 @@ The RLM library's `build_rlm_system_prompt()` concatenates our system prompt int
 - Section markers verified with `str.find()` extraction on test prompts
 - `.replace()` confirmed to substitute threshold while preserving `{{` double braces
 - With realistic wiki (~6K) and 14 tools, contexts reach 12-23K range (observation #2038), crossing the 20K threshold at turn 10+ with long tool results
+
+---
+
+### Fix (Change 15): Simplify AGENT_SYSTEM_PROMPT after regression — model copying examples
+
+**Problem**: After Change 13's two-workflow system prompt, the model regressed to 0/2 reward on airline tasks 3 and 4. Two issues:
+1. Model copied the action example `"How can I help you today?"` verbatim as its default response on nearly every turn (same class of bug as Change 11 / `sara_doe_496`)
+2. Model skipped all REPL steps (no `print(context)`, no size check) — the two-workflow structure (Step 1 → Step 2 → Workflow A/B) was too complex; model jumped straight to FINAL with the example text
+
+**Log**: `results/rlm-qwen3-32b-0.0_range_0--1_user-qwen-qwen3-32b-llm_0219143733.log`
+
+**File**: `rlm_bench/rlm_agent.py`
+
+**Changes**:
+1. Restored the simple workflow structure from the original prompt: `1. Read context → 2. Decide → 3. FINAL`. The size-aware chunking is now an inline `if/else` inside the single REPL block (Step 1), not two separate named workflows.
+2. Removed copyable example text (`"How can I help you today?"`). Format examples now use `"..."` placeholder instead of realistic text.
+3. Moved CRITICAL RULES above the workflow (first thing model sees after the intro).
+4. Restored the original simpler ROOT_PROMPT: `"Read the context and output FINAL..."`.
+
+**Key insight**: The model treats action examples as defaults. Any realistic text in examples becomes the model's fallback response. Use `"..."` placeholders in examples to force the model to generate its own responses from context.
+
+### Fix (Change 16): Revert AGENT_SYSTEM_PROMPT — if/else chunking caused total context-reading failure
+
+**Problem**: After Change 15's inline `if/else` system prompt, the model regressed further to 0/3 on airline tasks 0, 1, 2. TWO new failure modes:
+1. Model NEVER executed `print(context)` — it jumped straight to FINAL() on every call, meaning it never saw tool descriptions or conversation history
+2. Model hallucinated non-existent tool names (`retrieve_account_issue`, `process_refund`, `process_payment`) — because it never read the tool list from context
+3. Model output literal `[tool_call]` as text — framework syntax confusion
+
+**Log**: `results/rlm-qwen3-32b-0.0_range_0--1_user-qwen-qwen3-32b-llm_0219150534.log`
+
+**File**: `rlm_bench/rlm_agent.py`
+
+**Changes**: Reverted `AGENT_SYSTEM_PROMPT` to the original proven structure:
+```python
+"Workflow:\n"
+"1. Read the context: ```repl\nprint(context)\n```\n"
+"2. Decide your action based on the conversation history and available tools.\n"
+"3. Output FINAL([json_array]) with your action.\n\n"
+```
+
+Key differences from original:
+- Action examples use `"..."` and `"TOOL_NAME"` instead of `"How can I help you today?"` (prevents example copying)
+- Removed `llm_query` prohibition (no longer needed since chunking isn't in the prompt)
+- Section markers in `prompt_builder.py` remain (harmless extra text, useful for future work)
+
+**Lesson learned**: Multi-line Python blocks (if/else, str.find(), llm_query) in the system prompt are ignored by the model. The original one-liner `print(context)` was the simplest possible instruction and still only worked *some* of the time. The chunking optimization is premature — the model must first reliably read context before we can optimize *how* it reads context.
