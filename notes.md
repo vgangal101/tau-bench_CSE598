@@ -564,3 +564,23 @@ Key differences from original:
 - Section markers in `prompt_builder.py` remain (harmless extra text, useful for future work)
 
 **Lesson learned**: Multi-line Python blocks (if/else, str.find(), llm_query) in the system prompt are ignored by the model. The original one-liner `print(context)` was the simplest possible instruction and still only worked *some* of the time. The chunking optimization is premature — the model must first reliably read context before we can optimize *how* it reads context.
+
+---
+
+## Change 17: Fix `payment_methods` format error in Parameter Rules (Feb 20, 2026)
+
+**Problem**: In run `0219220114`, the model repeatedly failed `book_reservation` calls because it used `"id"` instead of `"payment_id"` as the key name in payment_methods objects. The tool schema requires `{"payment_id": "...", "amount": ...}` but the model passed `{"id": "...", "amount": ...}`, causing KeyError. The existing prompt line `"For payment_methods, pass ONLY payment_id and amount"` was too vague — it didn't make the exact key name or object structure clear enough.
+
+**File**: `rlm_bench/prompt_builder.py`
+
+**Change**: Replaced the vague parameter rule with an explicit example showing the exact object format:
+```python
+# Before:
+'- For payment_methods, pass ONLY payment_id and amount.\n'
+
+# After:
+'- For payment_methods, each element MUST be {{"payment_id": "credit_card_xxx", "amount": 150}}.\n'
+'  Use the key "payment_id" (NOT "id"). Each element must be an object, not a string.\n'
+```
+
+**Why**: The model needs to see the exact key name `"payment_id"` in a concrete example format, plus an explicit prohibition of the wrong key `"id"`. The `book_reservation` tool validates `payment_method["payment_id"]` directly — any other key name causes a KeyError.
