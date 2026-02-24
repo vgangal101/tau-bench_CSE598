@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=32b-retail-react-api-p2-tau-gaudi
+#SBATCH --job-name=32b-airline-act-api-p2-tau-gaudi
 #SBATCH --partition=gaudi
 #SBATCH --qos=class_gaudi
 #SBATCH --account=class_cse59827694spring2026
@@ -7,19 +7,19 @@
 #SBATCH --gres=gpu:hl225:8
 #SBATCH --cpus-per-task=60
 #SBATCH --mem=384G
-#SBATCH --time=20:00:00
-#SBATCH --output=32b-retail-react-api-p2-tau-gaudi_%j.out
-#SBATCH --error=32b-retail-react-api-p2-tau-gaudi_%j.err
+#SBATCH --time=6:00:00
+#SBATCH --output=32b-airline-act-api-p2-tau-gaudi_%j.out
+#SBATCH --error=32b-airline-act-api-p2-tau-gaudi_%j.err
 #SBATCH --exclusive
 
 set -e
-SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env_api/32b_retail_react"
+SCRIPT_DIR="${SLURM_SUBMIT_DIR}/SOL_env_api/32b_airline"
 REPO_ROOT="${SLURM_SUBMIT_DIR}"
 mkdir -p "$SCRIPT_DIR/logs"
-exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-react-api-p2_${SLURM_JOB_ID}.out") 2>&1
-exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-retail-react-api-p2_${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-act-api-p2_${SLURM_JOB_ID}.out") 2>&1
+exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-32b-airline-act-api-p2_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 32B Retail React (API User) Part 2/2 (Tasks 58-114) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 32B Airline Act (API User) Part 2/8 (Tasks 7-12) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -29,22 +29,21 @@ export APPTAINER_TMPDIR="/scratch/$USER/apptainer_tmp"
 export HF_HOME="/scratch/$USER/hf_cache"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$HF_HOME"
 
-# === Configuration ===
 AGENT_MODEL="Qwen/Qwen3-32B"
 USER_MODEL="qwen3-235b-a22b-instruct-2507"
 API_BASE_URL="https://openai.rc.asu.edu/v1"
 # Dynamic port for agent vLLM server
 AGENT_PORT=$((20000 + (SLURM_JOB_ID % 10000)))
 MAX_MODEL_LEN=40960
-ENV="retail"
-STRATEGY="react"
+ENV="airline"
+STRATEGY="act"
 NUM_TRIALS=5
-MAX_CONCURRENCY=2
+MAX_CONCURRENCY=1
 PART_NUM=2
-TASK_RANGE="58-114"
+TASK_RANGE="7-12"
 
-# Batch configuration for Part 2 (tasks 58-114)
-BATCHES=("58 114")
+# Batch configuration for Part 2 (tasks 7-12)
+BATCHES=("7 12")
 
 # === Check SOL API Key ===
 if [ -z "$SOL_API_KEY" ]; then
@@ -144,16 +143,16 @@ for BATCH in "${BATCHES[@]}"; do
     cd "$VLLM_CD"
 
     # Only start the Agent server locally; User model is served by SOL API
-    echo "=== Starting Agent Model Server (32B on HPUs 0,1,2,3) ==="
+    echo "=== Starting Agent Model Server (32B on HPUs 4,5,6,7) ==="
     AGENT_LOG="$SCRIPT_DIR/logs/gaudi_vllm_agent_32b_${SLURM_JOB_ID}_batch${BATCH_NUM}.log"
-    export APPTAINERENV_HABANA_VISIBLE_DEVICES=0,1,2,3
-    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 4 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.80 --use-padding-aware-scheduling --max-num-seqs 4 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
+    export APPTAINERENV_HABANA_VISIBLE_DEVICES=4,5,6,7
+    apptainer exec --bind /usr/lib64:/host-lib64 --bind /usr/lib/habanalabs:/usr/lib/habanalabs --bind /opt/habanalabs:/opt/habanalabs --bind /usr/bin/shim_ctl:/usr/bin/shim_ctl --bind "$HF_HOME:/mnt/hf_cache" --bind "$(pwd):/workspace/.cd" --bind "$WORK_DIR/logs:/var/log/habana_logs" --pwd /workspace/.cd --writable-tmpfs "$CONTAINER" vllm serve "$AGENT_MODEL" --host 0.0.0.0 --port $AGENT_PORT --block-size 128 --dtype bfloat16 --tensor-parallel-size 4 --download-dir /mnt/hf_cache --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.80 --use-padding-aware-scheduling --max-num-seqs 2 --max-num-prefill-seqs 1 --num-scheduler-steps 1 --disable-log-requests --enable-auto-tool-choice --tool-call-parser hermes --swap-space 16 > "$AGENT_LOG" 2>&1 &
     AGENT_PID=$!
 
     # Wait for agent server with skip-on-failure instead of exit 1
     BATCH_SKIP=false
 
-    echo -n "Waiting for Agent server (32B)..."
+    echo -n "Waiting for Agent server (32B on HPUs 4,5,6,7)..."
     for i in {1..180}; do
         if check_server "$AGENT_PORT"; then echo " Ready! (${i}0s)"; break; fi
         if ! kill -0 $AGENT_PID 2>/dev/null; then

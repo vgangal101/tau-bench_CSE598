@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Merge split 32B retail react (API user) experiment results into a single file.
+"""Merge split 32B airline (API user) experiment results from multiple parts into a single file.
 
 Protections against failed jobs:
   - --job-ids: Only merge results from specific SLURM job IDs (whitelist)
@@ -10,10 +10,10 @@ Protections against failed jobs:
   - --dry-run: Preview everything before writing
 
 Usage:
-    python merge_results.py
-    python merge_results.py --job-ids 46800001 46800002
-    python merge_results.py --exclude-jobs 46703271
-    python merge_results.py --dry-run
+    python merge_results.py --strategy react
+    python merge_results.py --strategy react --job-ids 46800001 46800002
+    python merge_results.py --strategy react --exclude-jobs 46703271
+    python merge_results.py --strategy react --dry-run
 """
 
 import argparse
@@ -93,7 +93,7 @@ def deduplicate_results(results: list) -> tuple[list, int]:
     return deduped, num_removed
 
 
-def validate_coverage(results: list, total_tasks: int = 115, num_trials: int = 5) -> dict:
+def validate_coverage(results: list, total_tasks: int = 50, num_trials: int = 5) -> dict:
     """Check which task indices are covered and trial completeness."""
     from collections import defaultdict
 
@@ -147,7 +147,13 @@ def validate_coverage(results: list, total_tasks: int = 115, num_trials: int = 5
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Merge split 32B retail react (API user) experiment results"
+        description="Merge split 32B airline (API user) experiment part results"
+    )
+    parser.add_argument(
+        "--strategy",
+        required=True,
+        choices=["act", "react", "tool-calling"],
+        help="Strategy to merge results for",
     )
     parser.add_argument(
         "--results-dir",
@@ -167,8 +173,8 @@ def main():
     parser.add_argument(
         "--total-tasks",
         type=int,
-        default=115,
-        help="Total expected tasks (default: 115)",
+        default=50,
+        help="Total expected tasks (default: 50)",
     )
     parser.add_argument(
         "--job-ids",
@@ -194,7 +200,7 @@ def main():
     else:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         results_dir = os.path.join(
-            script_dir, "results_gaudi_api", "retail", "react"
+            script_dir, "results_gaudi_api", "airline", args.strategy
         )
 
     if not os.path.isdir(results_dir):
@@ -229,7 +235,7 @@ def main():
         files.append(f)
 
     # Display header
-    print(f"Experiment: 32B Retail React (API User)")
+    print(f"Strategy: {args.strategy}")
     print(f"Results dir: {results_dir}")
     print(f"Found {len(all_files)} total part files, {len(files)} after filtering")
     if job_whitelist:
@@ -297,7 +303,7 @@ def main():
 
     # Check parts coverage
     print(f"Parts found: {sorted(parts_seen.keys())}")
-    expected_parts = set(range(1, 3))
+    expected_parts = set(range(1, 9))
     missing_parts = expected_parts - set(parts_seen.keys())
     if missing_parts:
         print(f"WARNING: Missing parts: {sorted(missing_parts)}")
@@ -330,7 +336,6 @@ def main():
             f"({coverage['complete_tasks']}/{coverage['total_expected']} tasks have all 5 trials)"
         )
         if coverage["incomplete_tasks"]:
-            # Show summary of incomplete tasks
             incomplete = coverage["incomplete_tasks"]
             num_incomplete = len(incomplete)
             total_missing_trials = sum(len(v) for v in incomplete.values())
@@ -342,7 +347,7 @@ def main():
         print("  (Could not determine task coverage from result format)")
 
     # Map parts to task ranges for rerun suggestions
-    PARTS_TASK_RANGES = {1: (0, 57), 2: (58, 114)}
+    PARTS_TASK_RANGES = {1: (0, 6), 2: (7, 12), 3: (13, 18), 4: (19, 24), 5: (25, 31), 6: (32, 37), 7: (38, 43), 8: (44, 49)}
 
     def find_parts_for_tasks(missing_tasks):
         """Find which parts need rerunning based on missing task IDs."""
@@ -370,18 +375,17 @@ def main():
         print("Rerun commands:")
         for p in failed_parts:
             start, end = PARTS_TASK_RANGES[p]
-            print(f"  sbatch SOL_env_api/32b_retail_react/part{p}_react.sh"
+            print(f"  sbatch SOL_env_api/32b_airline/part{p}_{args.strategy}.sh"
                   f"    # tasks {start}-{end}")
         print()
         print("After rerunning, re-merge:")
-        print(f"  python SOL_env_api/32b_retail_react/merge_results.py --dry-run")
+        print(f"  python SOL_env_api/32b_airline/merge_results.py "
+              f"--strategy {args.strategy} --dry-run")
     elif not trials_complete:
-        # All tasks have at least 1 trial but not all 5
         print()
         print(f"WARNING: All tasks present but only "
               f"{coverage['total_trajectories']}/{coverage['expected_trajectories']} "
               f"trials complete.")
-        # Find which parts have incomplete trials
         incomplete_parts = set()
         for task_id in coverage["incomplete_tasks"]:
             for part_num, (start, end) in PARTS_TASK_RANGES.items():
@@ -394,7 +398,7 @@ def main():
             print("Rerun commands to fill missing trials:")
             for p in sorted(incomplete_parts):
                 start, end = PARTS_TASK_RANGES[p]
-                print(f"  sbatch SOL_env_api/32b_retail_react/part{p}_react.sh"
+                print(f"  sbatch SOL_env_api/32b_airline/part{p}_{args.strategy}.sh"
                       f"    # tasks {start}-{end}")
 
     if args.dry_run:
@@ -402,12 +406,12 @@ def main():
         if is_complete:
             print("[DRY RUN] All tasks and trials complete! After merging, download with:")
             merged_name = (
-                f"react-Qwen3-32B-api-user-0.0"
+                f"{args.strategy}-Qwen3-32B-api-user-0.0"
                 f"_range_0-{args.total_tasks}_merged.json"
             )
             username = os.getenv("USER", "your_username")
-            print(f"  scp {username}@sol.asu.edu:$(pwd)/SOL_env_api/32b_retail_react"
-                  f"/results_gaudi_api/retail/react/{merged_name}"
+            print(f"  scp {username}@sol.asu.edu:$(pwd)/SOL_env_api/32b_airline"
+                  f"/results_gaudi_api/airline/{args.strategy}/{merged_name}"
                   f" ~/Downloads/")
         else:
             print("[DRY RUN] Would merge the above results. No output written.")
@@ -422,7 +426,7 @@ def main():
     else:
         output_path = os.path.join(
             results_dir,
-            f"react-Qwen3-32B-api-user-0.0_range_0-{args.total_tasks}_merged.json",
+            f"{args.strategy}-Qwen3-32B-api-user-0.0_range_0-{args.total_tasks}_merged.json",
         )
 
     with open(output_path, "w") as fp:
