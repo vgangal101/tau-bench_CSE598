@@ -635,3 +635,108 @@ SOL_env/8b_retail/logs/
 #### Results Location (Gaudi)
 
 Results are saved to `SOL_env/{size}_{env}/results_gaudi/{env}/{strategy}/`
+
+### SOL API User Experiments (SOL_env_api/)
+
+Identical to the Gaudi experiments in `SOL_env/` except the **User model is served by SOL's hosted OpenAI-compatible API** instead of a local vLLM server. The Agent model still runs locally on Gaudi HPUs.
+
+#### Key Differences from SOL_env/
+
+| Aspect | SOL_env/ (local) | SOL_env_api/ (API user) |
+|--------|-----------------|------------------------|
+| User Model | Qwen/Qwen3-32B (local vLLM) | qwen3-235b-a22b-instruct-2507 (SOL API) |
+| User Server | Local vLLM on HPUs | SOL API at `https://openai.rc.asu.edu/v1` |
+| API Key | `OPENAI_API_KEY="dummy"` | `OPENAI_API_KEY="$SOL_API_KEY"` |
+| Results Dir | `results_gaudi/` | `results_gaudi_api/` |
+| Everything else | Same HPUs, same agent, same parts, same time limits | Identical |
+
+#### Prerequisites
+
+```bash
+# One-time setup: add SOL API key to ~/.bashrc on SOL
+echo 'export SOL_API_KEY="your-key-here"' >> ~/.bashrc
+
+# Get API key from: https://voyager.rc.asu.edu/ → LLM Access tab
+```
+
+#### Directory Structure
+
+```
+SOL_env_api/
+├── generate_api_scripts.py           # Generator for all API-user experiment directories
+├── gaudi_api_experiment.sh           # Quick smoke test (both agent+user via API, no GPUs)
+├── 4b_airline/                       # 2 parts × 3 strategies
+├── 4b_retail/                        # 3 parts × 3 strategies
+├── 8b_airline/                       # 2 parts × 3 strategies
+├── 8b_retail/                        # 3 parts × 3 strategies
+├── 14b_airline/                      # 2 parts × 3 strategies
+├── 14b_retail/                       # 3 parts × 3 strategies
+├── 32b_airline/                      # 8 parts × 3 strategies
+└── 32b_retail/                       # 12 parts × 3 strategies
+```
+
+#### API User Model
+
+`qwen3-235b-a22b-instruct-2507` — 235B MoE model (22B active parameters), 262K context, hosted on SOL at `https://openai.rc.asu.edu/v1`.
+
+#### Running API User Experiments
+
+```bash
+# 1. Quick smoke test (no GPUs needed, runs on login node)
+bash SOL_env_api/gaudi_api_experiment.sh
+
+# 2. Submit a full experiment
+./SOL_env_api/8b_retail/submit_all.sh react
+
+# 3. Monitor
+squeue -u $USER
+
+# 4. Merge results
+python SOL_env_api/8b_retail/merge_results.py --strategy react --dry-run
+python SOL_env_api/8b_retail/merge_results.py --strategy react
+```
+
+#### Submit Commands (All Experiments)
+
+**Airline:**
+```bash
+./SOL_env_api/4b_airline/submit_all.sh act
+./SOL_env_api/4b_airline/submit_all.sh react
+./SOL_env_api/4b_airline/submit_all.sh tool-calling
+./SOL_env_api/8b_airline/submit_all.sh act
+./SOL_env_api/8b_airline/submit_all.sh react
+./SOL_env_api/8b_airline/submit_all.sh tool-calling
+./SOL_env_api/14b_airline/submit_all.sh act
+./SOL_env_api/14b_airline/submit_all.sh react
+./SOL_env_api/14b_airline/submit_all.sh tool-calling
+./SOL_env_api/32b_airline/submit_all.sh act
+./SOL_env_api/32b_airline/submit_all.sh react
+./SOL_env_api/32b_airline/submit_all.sh tool-calling
+```
+
+**Retail:**
+```bash
+./SOL_env_api/4b_retail/submit_all.sh act
+./SOL_env_api/4b_retail/submit_all.sh react
+./SOL_env_api/4b_retail/submit_all.sh tool-calling
+./SOL_env_api/8b_retail/submit_all.sh act
+./SOL_env_api/8b_retail/submit_all.sh react
+./SOL_env_api/8b_retail/submit_all.sh tool-calling
+./SOL_env_api/14b_retail/submit_all.sh act
+./SOL_env_api/14b_retail/submit_all.sh react
+./SOL_env_api/14b_retail/submit_all.sh tool-calling
+./SOL_env_api/32b_retail/submit_all.sh act
+./SOL_env_api/32b_retail/submit_all.sh react
+./SOL_env_api/32b_retail/submit_all.sh tool-calling
+```
+
+#### Regenerating API Scripts
+
+```bash
+python SOL_env_api/generate_api_scripts.py          # regenerate all 8 directories
+python SOL_env_api/generate_api_scripts.py --dry-run # preview only
+```
+
+#### Results Location (API User)
+
+Results are saved to `SOL_env_api/{size}_{env}/results_gaudi_api/{env}/{strategy}/`

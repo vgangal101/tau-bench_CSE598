@@ -7,6 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #1175 | 4:42 PM | ✅ | Updated SLURM account configuration for 32B airline react Part 2 | ~211 |
-| #1169 | " | 🔵 | 32B airline scripts use class account instead of research group account | ~302 |
+| #1215 | 5:21 PM | ✅ | Made SCP download commands user-agnostic in 8B airline merge script | ~285 |
+| #1213 | " | 🔴 | Replaced hardcoded username with dynamic USER environment variable in merge script | ~313 |
 </claude-mem-context>
