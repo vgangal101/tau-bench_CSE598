@@ -9,4 +9,11 @@
 |----|------|---|-------|------|
 | #837 | 6:35 PM | 🔵 | Reward Calculation Logic and Ground Truth Validation | ~469 |
 | #832 | " | 🔵 | LLM User Simulation Architecture and Connection Dependencies | ~472 |
+
+### Feb 19, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2018 | 1:01 PM | 🔵 | User Simulator Interface with Human and LLM Implementations | ~377 |
+| #2016 | 1:00 PM | 🔵 | Environment Base Class with Hash-Based Reward Calculation | ~559 |
 </claude-mem-context>
