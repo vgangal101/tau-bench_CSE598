@@ -222,7 +222,7 @@ MAX_MODEL_LEN=40960
 ENV="{env}"
 STRATEGY="{strategy}"
 NUM_TRIALS=5
-MAX_CONCURRENCY={hw.get('max_concurrency', 2)}
+MAX_CONCURRENCY={hw.get('max_concurrency', 1)}
 PART_NUM={part_num}
 TASK_RANGE="{task_range}"
 
