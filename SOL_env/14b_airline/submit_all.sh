@@ -1,12 +1,12 @@
 #!/bin/bash
-# Submit all 2 parts of a 14B airline experiment for a given strategy.
+# Submit all 4 parts of a 14B airline experiment for a given strategy.
 # Usage: ./submit_all.sh <strategy>
 #   strategy: act, react, or tool-calling
 #
 # Example:
-#   ./submit_all.sh react        # Submit parts 1-2 for react
-#   ./submit_all.sh act           # Submit parts 1-2 for act
-#   ./submit_all.sh tool-calling  # Submit parts 1-2 for tool-calling
+#   ./submit_all.sh react        # Submit parts 1-4 for react
+#   ./submit_all.sh act           # Submit parts 1-4 for act
+#   ./submit_all.sh tool-calling  # Submit parts 1-4 for tool-calling
 
 set -e
 
@@ -32,7 +32,7 @@ echo "=========================================="
 echo ""
 
 JOBS=()
-for PART in $(seq 1 2); do
+for PART in $(seq 1 4); do
     SCRIPT="${SCRIPT_DIR}/part${PART}_${STRATEGY}.sh"
     if [ ! -f "$SCRIPT" ]; then
         echo "ERROR: Script not found: $SCRIPT"
@@ -47,13 +47,15 @@ done
 
 echo ""
 echo "=========================================="
-echo "All 2 parts submitted successfully!"
+echo "All 4 parts submitted successfully!"
 echo "=========================================="
 echo ""
 echo "Strategy: ${STRATEGY}"
 echo "Job IDs:"
-echo "  Part 1 (tasks 0-24):   ${JOBS[0]}"
-echo "  Part 2 (tasks 25-49):   ${JOBS[1]}"
+echo "  Part 1 (tasks 0-12):   ${JOBS[0]}"
+echo "  Part 2 (tasks 13-24):   ${JOBS[1]}"
+echo "  Part 3 (tasks 25-37):   ${JOBS[2]}"
+echo "  Part 4 (tasks 38-49):   ${JOBS[3]}"
 echo ""
 echo "Monitor with: squeue -u \$USER"
 echo "After all jobs complete, merge results with:"

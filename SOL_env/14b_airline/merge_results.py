@@ -303,7 +303,7 @@ def main():
 
     # Check parts coverage
     print(f"Parts found: {sorted(parts_seen.keys())}")
-    expected_parts = set(range(1, 3))
+    expected_parts = set(range(1, 5))
     missing_parts = expected_parts - set(parts_seen.keys())
     if missing_parts:
         print(f"WARNING: Missing parts: {sorted(missing_parts)}")
@@ -348,7 +348,7 @@ def main():
         print("  (Could not determine task coverage from result format)")
 
     # Map parts to task ranges for rerun suggestions
-    PARTS_TASK_RANGES = {1: (0, 24), 2: (25, 49)}
+    PARTS_TASK_RANGES = {1: (0, 12), 2: (13, 24), 3: (25, 37), 4: (38, 49)}
 
     def find_parts_for_tasks(missing_tasks):
         """Find which parts need rerunning based on missing task IDs."""

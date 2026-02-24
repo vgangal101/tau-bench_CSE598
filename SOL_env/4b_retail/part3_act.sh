@@ -19,7 +19,7 @@ mkdir -p "$SCRIPT_DIR/logs"
 exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-4b-retail-act-p3_${SLURM_JOB_ID}.out") 2>&1
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-4b-retail-act-p3_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 4B Retail Act Part 3/3 (Tasks 80-114) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 4B Retail Act Part 3/6 (Tasks 40-59) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -40,10 +40,10 @@ STRATEGY="act"
 NUM_TRIALS=5
 MAX_CONCURRENCY=2
 PART_NUM=3
-TASK_RANGE="80-114"
+TASK_RANGE="40-59"
 
-# Batch configuration for Part 3 (tasks 80-114)
-BATCHES=("80 99" "100 114")
+# Batch configuration for Part 3 (tasks 40-59)
+BATCHES=("40 59")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"

@@ -89,19 +89,23 @@ HARDWARE = {
 TIME_LIMITS = {
     ("4b", "airline"): "8:00:00",
     ("4b", "retail"): "10:00:00",
-    ("8b", "airline"): "8:00:00",
-    ("8b", "retail"): "10:00:00",
+    ("8b", "airline"): "14:00:00",
+    ("8b", "retail"): "14:00:00",
     ("14b", "airline"): "10:00:00",
     ("14b", "retail"): "12:00:00",
     ("32b", "airline"): "6:00:00",
-    ("32b", "retail"): "8:00:00",
+    ("32b", "retail"): "20:00:00",
 }
 
 # Batch splits per environment
-# Airline: 50 tasks → 2 parts, 2 batches each
+# Airline (4B/8B/14B): 50 tasks → 4 parts, 1 batch each
+# HPU devices can't be reacquired after vLLM shutdown within same SLURM job
+# (synStatus=8 [Device not found]), so each part runs exactly 1 batch and exits.
 AIRLINE_PARTS = {
-    1: {"task_range": "0-24", "batches": [("0", "12"), ("13", "24")]},
-    2: {"task_range": "25-49", "batches": [("25", "37"), ("38", "49")]},
+    1: {"task_range": "0-12", "batches": [("0", "12")]},
+    2: {"task_range": "13-24", "batches": [("13", "24")]},
+    3: {"task_range": "25-37", "batches": [("25", "37")]},
+    4: {"task_range": "38-49", "batches": [("38", "49")]},
 }
 
 # Airline 32B: 50 tasks → 8 parts, 1 batch each (~6-7 tasks per part)
@@ -119,11 +123,15 @@ AIRLINE_32B_PARTS = {
     8: {"task_range": "44-49", "batches": [("44", "49")]},
 }
 
-# Retail (4B/8B/14B): 115 tasks → 3 parts, 2 batches each
+# Retail (4B/8B/14B): 115 tasks → 6 parts, 1 batch each
+# Same HPU device reacquisition issue as airline.
 RETAIL_PARTS = {
-    1: {"task_range": "0-39", "batches": [("0", "19"), ("20", "39")]},
-    2: {"task_range": "40-79", "batches": [("40", "59"), ("60", "79")]},
-    3: {"task_range": "80-114", "batches": [("80", "99"), ("100", "114")]},
+    1: {"task_range": "0-19", "batches": [("0", "19")]},
+    2: {"task_range": "20-39", "batches": [("20", "39")]},
+    3: {"task_range": "40-59", "batches": [("40", "59")]},
+    4: {"task_range": "60-79", "batches": [("60", "79")]},
+    5: {"task_range": "80-99", "batches": [("80", "99")]},
+    6: {"task_range": "100-114", "batches": [("100", "114")]},
 }
 
 # Retail 32B: 115 tasks → 12 parts, 1 batch each (~10 tasks per part)

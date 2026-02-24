@@ -19,7 +19,7 @@ mkdir -p "$SCRIPT_DIR/logs"
 exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-14b-retail-tool-calling-p1_${SLURM_JOB_ID}.out") 2>&1
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-14b-retail-tool-calling-p1_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 14B Retail Tool-Calling Part 1/3 (Tasks 0-39) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 14B Retail Tool-Calling Part 1/6 (Tasks 0-19) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -40,10 +40,10 @@ STRATEGY="tool-calling"
 NUM_TRIALS=5
 MAX_CONCURRENCY=2
 PART_NUM=1
-TASK_RANGE="0-39"
+TASK_RANGE="0-19"
 
-# Batch configuration for Part 1 (tasks 0-39)
-BATCHES=("0 19" "20 39")
+# Batch configuration for Part 1 (tasks 0-19)
+BATCHES=("0 19")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"

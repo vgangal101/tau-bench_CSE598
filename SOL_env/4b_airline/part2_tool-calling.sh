@@ -19,7 +19,7 @@ mkdir -p "$SCRIPT_DIR/logs"
 exec > >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-4b-airline-tool-calling-p2_${SLURM_JOB_ID}.out") 2>&1
 exec 2> >(tee -a "$SCRIPT_DIR/logs/tau-gaudi-4b-airline-tool-calling-p2_${SLURM_JOB_ID}.err" >&2)
 
-echo "========================================"; echo "=== Gaudi 4B Airline Tool-Calling Part 2/2 (Tasks 25-49) ==="; echo "========================================"
+echo "========================================"; echo "=== Gaudi 4B Airline Tool-Calling Part 2/4 (Tasks 13-24) ==="; echo "========================================"
 echo "Started at: $(date)"; echo "Job ID: $SLURM_JOB_ID"; echo "Node: $(hostname)"
 
 hl-smi || echo "hl-smi not available yet"
@@ -40,10 +40,10 @@ STRATEGY="tool-calling"
 NUM_TRIALS=5
 MAX_CONCURRENCY=2
 PART_NUM=2
-TASK_RANGE="25-49"
+TASK_RANGE="13-24"
 
-# Batch configuration for Part 2 (tasks 25-49)
-BATCHES=("25 37" "38 49")
+# Batch configuration for Part 2 (tasks 13-24)
+BATCHES=("13 24")
 
 GAUDI_BASE="/data/sse/gaudi"
 CONTAINER="$GAUDI_BASE/containers/vllm-gaudi.sif"
