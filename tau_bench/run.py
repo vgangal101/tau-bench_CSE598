@@ -13,8 +13,11 @@ from concurrent.futures import ThreadPoolExecutor
 from tau_bench.envs import get_env
 from tau_bench.agents.base import Agent
 from tau_bench.types import EnvRunResult, RunConfig
+import litellm
 from litellm import provider_list
 from tau_bench.envs.user import UserStrategy
+
+litellm.num_retries = 3
 
 
 def run(config: RunConfig) -> List[EnvRunResult]:
